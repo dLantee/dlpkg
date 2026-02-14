@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dlpkg"
+version = "0.2.0"
+description = "Simple packaging helper CLI (bump/build/install)"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "tomlkit>=0.14.0",
+]
+
+[project.scripts]
+dlpkg = "dlpkg.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+exclude = ["tests*", "docs*", "examples*", "images*", "README*", "LICENSE*",
+  "*.toml", "dist*", "build*"
+]
