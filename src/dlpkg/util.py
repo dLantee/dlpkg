@@ -1,15 +1,9 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field, fields
 import os
 import shutil
 import subprocess
 from pathlib import Path
-import tomlkit
-
-from .versioning import SemVer
-
-DEFAULT_SRC_DIRS = ["src", "python"]
 
 
 def run(cmd: list[str], cwd: Path | None = None) -> None:

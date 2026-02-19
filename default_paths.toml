@@ -1,0 +1,3 @@
+[defaults]
+install_dir = "D:/Extensions/maya/modules"
+build_dir = "./build"
