@@ -2,6 +2,7 @@
 Versioning utilities.
 """
 from __future__ import annotations
+
 import re
 from pathlib import Path
 from dataclasses import dataclass
@@ -10,30 +11,49 @@ from typing import Optional, Tuple, List, Union
 
 
 
-def update_init_version(source_root: Path, new_version: str) -> bool:
-    """If src/<pkg>/__init__.py has __version__ = "...", update it.
+_VERSION_RE = re.compile(r'__version__(?:\s*:\s*[\w\[\].]+)?\s*=\s*([\'"])([^\'"]+)\1')
 
-    Args:
-        source_root: Path to source root (e.g. src/mypkg)
-        new_version: New version string to set (e.g. "1.2.3")
-    Returns:
-        True if updated, False if not found or failed.
+def init_version(source_root: Path, new_version: str = "", verbose: bool = False) -> str:
+    """If new_version is empty, return the existing version from a matching __init__.py.
+    Otherwise, update the first matching __init__.py and return new_version.
+
+    Raises:
+        FileNotFoundError: if no __init__.py files exist under source_root
+        AttributeError: if no __version__ assignment is found
+        ValueError: if existing __version__ can't be parsed when new_version is empty
     """
-    init_path = source_root / "__init__.py"
-    if not init_path.exists():
-        return False
+    paths = sorted(source_root.glob("**/__init__.py"))
+    if not paths:
+        raise FileNotFoundError(f"No __init__.py files found in {source_root}!")
 
-    text = init_path.read_text(encoding="utf-8")
-    needle = "__version__"
-    if needle not in text:
-        return False
+    # Read-only mode: return first parsed version
+    if new_version == "":
+        for init_path in paths:
+            text = init_path.read_text(encoding="utf-8")
+            m = _VERSION_RE.search(text)
+            if m:
+                return m.group(2)
+        raise AttributeError(f"__version__ not found in any __init__.py files in {source_root}!")
 
-    pattern = r'(__version__\s*=\s*")[^"]*(")'
-    new_text, n = re.subn(pattern, rf'\g<1>{new_version}\2', text, count=1)
-    if n:
-        init_path.write_text(new_text, encoding="utf-8")
-        return True
-    return False
+    # Update mode: update first file that matches
+    for init_path in paths:
+        text = init_path.read_text(encoding="utf-8")
+        m = _VERSION_RE.search(text)
+        if not m:
+            continue
+
+        def repl(match: re.Match) -> str:
+            quote = match.group(1)
+            return f'__version__ = {quote}{new_version}{quote}'
+
+        new_text, n = _VERSION_RE.subn(repl, text, count=1)
+        if n:
+            init_path.write_text(new_text, encoding="utf-8")
+            if verbose:
+                print(f"Updated version in {init_path}: {m.group(2)} -> {new_version}")
+            return new_version
+
+    raise AttributeError(f"__version__ not found in any __init__.py files in {source_root}!")
 
 
 @total_ordering
@@ -88,8 +108,9 @@ class SemVer:
         if part == "patch":
             return SemVer(self.major, self.minor, self.patch + 1)
         if part == "prerelease":
+            # TODO: Missing argument; Provide support for bumping prerelease with label (e.g. alpha -> beta, or alpha.1 -> beta.1)
             return self.bump_prerelease()
-        raise ValueError(f"Unknown part: {part}")
+        raise ValueError(f"Unknown version part: {part}")
 
     def bump_prerelease(self, label: Optional[str] = None) -> "SemVer":
         """
