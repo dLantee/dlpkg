@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+- Fixed an issue where the `version` command did version bumping but still throw error.
+- Fixed a wrong argument call from parser in `cmd_build`.
+
+### Added
+- Added installing from wheel file in `install` sub-command.
+
 ## [0.3.0] - 2026-02-25
 
 ### Added

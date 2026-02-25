@@ -88,7 +88,10 @@ class PythonPackage(object):
 
             for src_root in self._config_file.source_roots:
                 try:
+                    # TODO: Revisit this logic to ensure it works correctly
+                    #  with different project structures and edge cases.
                     init_version(src_root, new_version=value)
+                    return
                 except (FileExistsError, AttributeError):
                     # Source root doesn't have __init__.py or __version__, skip it
                     pass
@@ -116,6 +119,11 @@ class PythonPackage(object):
         if self._config_file is not None:
             return self._config_file.source_roots
         raise RuntimeError(f"Could not find source code in {self.root_dir}")
+
+    @property
+    def has_config(self) -> bool:
+        """Returns True if package has a valid pyproject.toml config file."""
+        return self._config_file is not None
 
     def _resolve_package_name(self) -> str:
         # Try to read from pyproject.toml

@@ -4,6 +4,7 @@ CLI entry point for dlpkg.
 from __future__ import annotations
 
 import argparse
+import re
 from pathlib import Path
 import logging
 
@@ -51,7 +52,7 @@ def cmd_version(args: argparse.Namespace) -> int:
 
 
 def cmd_build(args: argparse.Namespace) -> int:
-    src_dir = Path(args.source).resolve()
+    src_dir = Path(args.root_dir).resolve()
     out_dir = Path(args.out_dir).resolve()
     ensure_empty_dir(out_dir)
 
@@ -65,23 +66,46 @@ def cmd_build(args: argparse.Namespace) -> int:
 
 def cmd_install(args: argparse.Namespace) -> int:
     override = False
+    root_dir = Path(args.source_path).resolve()
+    name: str
+    version: str
+    src_path: Path | None = None
 
-    root_dir = Path(args.src_path).resolve()
-    if not root_dir.is_dir():
-        pass
+    if root_dir.is_dir():
+        pkg_info = PythonPackage(root_dir)
+        if not pkg_info.has_config:
+            raise RuntimeError(f"Cannot find package config in {root_dir}. "
+                               f"Please make sure pyproject.toml exists and is properly configured.")
+        name = pkg_info.name
+        version = pkg_info.version
+        src_path = pkg_info.root_dir
+    elif '.whl' in root_dir.suffixes:
+        # If source_path is not a directory, we assume it's a wheel file and try to parse package info from the file name.
+        # This is a bit hacky but allows us to support installing directly from a wheel file without needing to specify the package name and version separately.
+        wheel_path = Path(args.source_path).resolve()
+        wheel_pattern = re.compile(
+            r'^(?P<name>[^-]+)-'
+            r'(?P<version>[^-]+)-'
+            r'(?P<python>py[^-]+)-'
+            r'[^-]+-'
+            r'[^-]+$'
+        )
+        m = wheel_pattern.match(wheel_path.stem)
+        if not m:
+            raise RuntimeError(f"Cannot parse package info from wheel file name: {wheel_path.stem}")
+        name = m.group("name")
+        version = m.group("version")
+        src_path = wheel_path
+    else:
+        raise RuntimeError(f"Invalid source path: {args.source_path}. Must be a package root directory or a wheel file.")
 
-    pkg_info = PythonPackage(root_dir)
-    src_path = Path(args.src_path).resolve()
-    dst_path = (Path(args.out_dir) / pkg_info.name / f"{args.channel}-{pkg_info.version}").resolve()
-
-    # collect source wheel path
-    # wheel_paths = list(dist_dir.glob("**/*.whl"))
+    dst_path = (Path(args.out_dir) / name / f"{args.channel}-{version}").resolve()
 
     msg = [
         # "="*40,
         f"{CMD_FORMAT.BOLD}* Installing package:{CMD_FORMAT.END}",
-        f"package: {pkg_info.name}",
-        f"version: {pkg_info.version}",
+        f"package: {name}",
+        f"version: {version}",
         f"channel: {args.channel}",
         f"source: {src_path.as_posix() if src_path else f'{CMD_FORMAT.RED}No wheel found in dist dir!{CMD_FORMAT.END}'}",
         f"target dir: {dst_path.as_posix()}",
@@ -114,7 +138,7 @@ def cmd_install(args: argparse.Namespace) -> int:
     # if args.write_mod:
     #     _write_mod_file(dst, args.name, args.version)
 
-    print(f"{CMD_FORMAT.GREEN}Successfully installed {pkg_info.name} package to: {dst_path}{CMD_FORMAT.END}")
+    print(f"{CMD_FORMAT.GREEN}Successfully installed {name} package to: {dst_path}{CMD_FORMAT.END}")
     return 0
 
 
