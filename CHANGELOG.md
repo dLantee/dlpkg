@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-02-25
+
 ### Fixed
 - Fixed an issue where the `version` command did version bumping but still throw error.
 - Fixed a wrong argument call from parser in `cmd_build`.
