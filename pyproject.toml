@@ -7,7 +7,7 @@ name = "dlpkg"
 version = "0.3.0"
 description = "Simple packaging helper CLI (bump/build/install)"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.13"
 dependencies = [
   "tomlkit>=0.14.0",
 ]

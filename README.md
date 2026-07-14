@@ -2,7 +2,7 @@
 
 # dlpkg
 
-🐍 Python version: **3.10**
+🐍 Python version: **3.13**
 
 `dlpkg` is a command line tool to help with Python package development, versioning, building, and installation.
 
