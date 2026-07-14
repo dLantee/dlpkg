@@ -54,13 +54,13 @@ def test_cmd_build(tmp_path: Path, temp_toml_package: Path):
     assert any(dist_path.glob("*.whl"))  # check that wheel file is created
 
 
-def test_install_basic(tmp_path, temp_toml_package: Path):
+def test_publish_basic(tmp_path, temp_toml_package: Path):
     args = argparse.Namespace(root_dir=str(temp_toml_package), out_dir=str(tmp_path))
-    rc = cli.cmd_install(args)
+    rc = cli.cmd_publish(args)
     assert rc == 0
 
 
-def test_update_args_from_files_install_out_dir_uses_config_publish_dir(monkeypatch, tmp_path: Path):
+def test_update_args_from_files_publish_out_dir_uses_config_publish_dir(monkeypatch, tmp_path: Path):
     class FakePyProject:
         project_name = "MyProject"
         project_version = "0.1.0"
@@ -74,13 +74,13 @@ def test_update_args_from_files_install_out_dir_uses_config_publish_dir(monkeypa
     monkeypatch.setattr(cli, "_get_pyproject_doc", lambda root: FakePyProject())
     monkeypatch.setattr(cli, "_get_config_doc", lambda root: FakeConfig())
 
-    args = argparse.Namespace(cmd="install", root_dir=str(tmp_path), name=None, source_dir=None, version=None, out_dir=None)
+    args = argparse.Namespace(cmd="publish", root_dir=str(tmp_path), name=None, source_dir=None, version=None, out_dir=None)
     updated = cli._update_args_from_files(args)
 
     assert updated.out_dir == str(FakeConfig.publish_dir)
 
 
-def test_update_args_from_files_install_out_dir_falls_back_to_maya_module_path(monkeypatch, tmp_path: Path):
+def test_update_args_from_files_publish_out_dir_falls_back_to_maya_module_path(monkeypatch, tmp_path: Path):
     class FakePyProject:
         project_name = "MyProject"
         project_version = "0.1.0"
@@ -96,14 +96,14 @@ def test_update_args_from_files_install_out_dir_falls_back_to_maya_module_path(m
     monkeypatch.setattr(cli, "_get_config_doc", raise_file_not_found)
     monkeypatch.setenv("MAYA_MODULE_PATH", str(tmp_path / "mayaModules") + ";" + str(tmp_path / "other"))
 
-    args = argparse.Namespace(cmd="install", root_dir=str(tmp_path), name=None, source_dir=None, version=None, out_dir=None)
+    args = argparse.Namespace(cmd="publish", root_dir=str(tmp_path), name=None, source_dir=None, version=None, out_dir=None)
     updated = cli._update_args_from_files(args)
 
     # Note: cli splits on whitespace, not os.pathsep
     assert updated.out_dir == str(tmp_path / "mayaModules")
 
 
-def test_update_args_from_files_install_out_dir_raises_if_no_config_and_no_env(monkeypatch, tmp_path: Path):
+def test_update_args_from_files_publish_out_dir_raises_if_no_config_and_no_env(monkeypatch, tmp_path: Path):
     class FakePyProject:
         project_name = "MyProject"
         project_version = "0.1.0"
@@ -119,7 +119,7 @@ def test_update_args_from_files_install_out_dir_raises_if_no_config_and_no_env(m
     monkeypatch.setattr(cli, "_get_config_doc", raise_file_not_found)
     monkeypatch.delenv("MAYA_MODULE_PATH", raising=False)
 
-    args = argparse.Namespace(cmd="install", root_dir=str(tmp_path), name=None, source_dir=None, version=None, out_dir=None)
+    args = argparse.Namespace(cmd="publish", root_dir=str(tmp_path), name=None, source_dir=None, version=None, out_dir=None)
 
     with pytest.raises(RuntimeError, match="MAYA_MODULE_PATH"):
         cli._update_args_from_files(args)

@@ -80,7 +80,7 @@ def cmd_build(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_install(args: argparse.Namespace) -> int:
+def cmd_publish(args: argparse.Namespace) -> int:
     override = False
     root_dir = Path(args.source_path).resolve()
     name: str
@@ -119,7 +119,7 @@ def cmd_install(args: argparse.Namespace) -> int:
 
     msg = [
         # "="*40,
-        f"{CMD_FORMAT.BOLD}* Installing package:{CMD_FORMAT.END}",
+        f"{CMD_FORMAT.BOLD}* Publishing package:{CMD_FORMAT.END}",
         f"package: {name}",
         f"version: {version}",
         f"channel: {args.channel}",
@@ -137,7 +137,7 @@ def cmd_install(args: argparse.Namespace) -> int:
         try:
             ensure_empty_dir(dst_path)
         except PermissionError as e:
-            e.args = (f"Cannot override installed packages. Access is denied: {dst_path!r}",)
+            e.args = (f"Cannot override published packages. Access is denied: {dst_path!r}",)
             raise e
     elif dst_path.exists():
         raise FileExistsError(f"Target folder already exists: {dst_path!r}")
@@ -154,7 +154,7 @@ def cmd_install(args: argparse.Namespace) -> int:
     # if args.write_mod:
     #     _write_mod_file(dst, args.name, args.version)
 
-    print(f"{CMD_FORMAT.GREEN}Successfully installed {name} package to: {dst_path}{CMD_FORMAT.END}")
+    print(f"{CMD_FORMAT.GREEN}Successfully published {name} package to: {dst_path}{CMD_FORMAT.END}")
     return 0
 
 
@@ -182,18 +182,18 @@ def main() -> int:
     p_build.add_argument("--out-dir", default="./build", help="Output dir (default: ./build)")
     p_build.set_defaults(func=cmd_build)
 
-    # -- install
-    p_inst = sub.add_parser("install", help="Copy files into a target root")
-    p_inst.add_argument("source_path", nargs="?", default='.', help=f"Source wheel file or dist folder (default: first .whl in dist folder)")
-    p_inst.add_argument("--out-dir", default="./install", help=f"Target root folder. E.g. This is where the package will be installed.")
-    # p_inst.add_argument("--name", help="Package name (default: read from pyproject)")
-    # p_inst.add_argument("--version", help="Override version (default: read from pyproject)")
-    p_inst.add_argument("--channel", choices=["rel", "dev"], default="rel")
-    p_inst.add_argument("--read-only", action="store_true", help="Set read-only permissions on the installed files")
-    # p_inst.add_argument("--write-mod", action="store_true", help="Write a .mod file into the first MAYA_MODULE_PATH dir")
-    # p_inst.add_argument("--dist-dir", default='./dist', help=f"Install from wheel file or dist folder (default: ./dist). If a dist folder is given, the first .whl file inside will be used.")
-    p_inst.add_argument("--dry-run", action="store_true", help=f"Print publish plan without copying files")
-    p_inst.set_defaults(func=cmd_install)
+    # -- publish
+    p_pub = sub.add_parser("publish", help="Publish package files into a target root")
+    p_pub.add_argument("source_path", nargs="?", default='.', help=f"Source wheel file or dist folder (default: first .whl in dist folder)")
+    p_pub.add_argument("--out-dir", default="./publish", help=f"Target root folder. E.g. This is where the package will be published.")
+    # p_pub.add_argument("--name", help="Package name (default: read from pyproject)")
+    # p_pub.add_argument("--version", help="Override version (default: read from pyproject)")
+    p_pub.add_argument("--channel", choices=["rel", "dev"], default="rel")
+    p_pub.add_argument("--read-only", action="store_true", help="Set read-only permissions on the published files")
+    # p_pub.add_argument("--write-mod", action="store_true", help="Write a .mod file into the first MAYA_MODULE_PATH dir")
+    # p_pub.add_argument("--dist-dir", default='./dist', help=f"Install from wheel file or dist folder (default: ./dist). If a dist folder is given, the first .whl file inside will be used.")
+    p_pub.add_argument("--dry-run", action="store_true", help=f"Print publish plan without copying files")
+    p_pub.set_defaults(func=cmd_publish)
 
     # -- write-mod file
     # p_mod = sub.add_parser("writemod", parents=[base_parser], help="Write a .mod file into the first MAYA_MODULE_PATH dir")

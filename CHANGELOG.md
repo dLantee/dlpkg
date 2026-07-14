@@ -4,6 +4,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+- Renamed `install` sub-command to `publish` for clarity.
+
 ## [0.3.3] - 2026-07-14
 
 ### Added

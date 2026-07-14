@@ -4,7 +4,7 @@
 
 🐍 Python version: **3.13**
 
-`dlpkg` is a command line tool to help with Python package development, versioning, building, and installation.
+`dlpkg` is a command line tool to help with Python package development, versioning, building, and publishing.
 
 ## Install dlpkg
 
@@ -23,15 +23,15 @@ py -m pip install path/to/dlpkg_root
 ### Stages of package management
 
 Stages of package management with dlpkg: \
-`Development🧪️️ --> Versioning🔢 --> Building🛠️ --> Installation📦📌`
+`Development🧪️️ --> Versioning🔢 --> Building🛠️ --> Publishing📦📌`
 
 **Development:** Edit your source code in the `src/your_package/` folder (or as specified in your pyproject.toml).  \
 **Versioning:** Use `dlpkg version --bump [part]` to increase the version. \
 **Building:** Use `dlpkg build` to build the package distribution (wheel) file.    \
-**Installation:** Use `dlpkg install --out-dir [path]` to install the package to a target directory with versioned folder names.
+**Publishing:** Use `dlpkg publish --out-dir [path]` to publish the package to a target directory with versioned folder names.
 
 > [!NOTE]  
-> `dlpkg install` without position argument is automatically building the package before installation.
+> `dlpkg publish` without position argument is automatically building the package before publishing.
 
 ## Requirements
 
@@ -103,29 +103,29 @@ dlpkg build --out-dir /path/to/build
 dlpkg build
 ```
 
-### Install
+### Publish
 
-`dlpkg install [options] [source_path]`
+`dlpkg publish [options] [source_path]`
 
-Install the package to a target directory with versioned folder names.
+Publish the package to a target directory with versioned folder names.
 This creates: `/target_folder/yourpkg/rel-x.y.z/`
 
 **Arguments & Flags:**
 - source_path : Optional argument, specify the root of your package or wheel file (default is current directory).
-- --out-dir : Optional flag, Specify the target directory where the package should be installed. (default: `./installs`)
+- --out-dir : Optional flag, Specify the target directory where the package should be published. (default: `./publish`)
 - --channel : Optional flag, specify the release channel (default: rel, available: `rel`, `dev`).
 - --version : Optional flag, override version (default: read from pyproject).
-- --write-mod : Optional flag, write a mod file with the installed version and channel information (default: False).
-- --read-only : Optional flag, make the installed package read-only by removing write permissions (default: False).
-- --dry-run : Optional flag, print the installation steps without actually performing them (default: False).
+- --write-mod : Optional flag, write a mod file with the published version and channel information (default: False).
+- --read-only : Optional flag, make the published package read-only by removing write permissions (default: False).
+- --dry-run : Optional flag, print the publish steps without actually performing them (default: False).
 
 ```commandline
-dlpkg install --out-dir X:/publishes /path/to/your_package
-dlpkg install --out-dir X:/publishes path/to/*.whl
+dlpkg publish --out-dir X:/publishes /path/to/your_package
+dlpkg publish --out-dir X:/publishes path/to/*.whl
 cd /path/to/your_package
-dlpkg install --out-dir X:/publishes --read-only
-dlpkg install --out-dir X:/publishes --channel dev
-dlpkg install --out-dir X:/publishes --dry-run
+dlpkg publish --out-dir X:/publishes --read-only
+dlpkg publish --out-dir X:/publishes --channel dev
+dlpkg publish --out-dir X:/publishes --dry-run
 ```
 
 ## Contributing
