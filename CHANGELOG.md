@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-07-14
+
+### Changed
+- Bump minimum supported Python version to 3.13 ([#15])
+
 ## [0.3.1] - 2026-02-25
 
 ### Fixed
@@ -49,3 +54,4 @@ All notable changes to this project will be documented in this file.
 
 [#7]: https://github.com/dLantee/dlpkg/issues/7
 [#10]: https://github.com/dLantee/dlpkg/issues/10
+[#15]: https://github.com/dLantee/dlpkg/issues/15
