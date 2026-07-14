@@ -8,6 +8,7 @@ import re
 from pathlib import Path
 import logging
 
+from dlpkg import __version__
 from dlpkg.versioning import SemVer
 from dlpkg.package import PythonPackage
 from dlpkg.util import ensure_empty_dir, run, make_read_only_recursively
@@ -24,6 +25,21 @@ class CMD_FORMAT:
     END = '\033[0m'  # Reset code
     BOLD = '\033[1m'
     UNDERLINE = '\033[4m'
+
+
+class _HelpWithVersionAction(argparse.Action):
+    """Like the default -h/--help action, but also prints the dlpkg version and install location."""
+
+    def __init__(self, option_strings, dest=argparse.SUPPRESS, default=argparse.SUPPRESS, help=None):
+        super().__init__(option_strings=option_strings, dest=dest, default=default, nargs=0, help=help)
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        location = Path(__file__).resolve().parent
+        print(f"dlpkg {__version__}")
+        print(f"Location: {location}")
+        print()
+        parser.print_help()
+        parser.exit()
 
 
 def cmd_version(args: argparse.Namespace) -> int:
@@ -143,7 +159,8 @@ def cmd_install(args: argparse.Namespace) -> int:
 
 
 def main() -> int:
-    p = argparse.ArgumentParser(prog="dlpkg")
+    p = argparse.ArgumentParser(prog="dlpkg", add_help=False)
+    p.add_argument("-h", "--help", action=_HelpWithVersionAction, help="show this help message and exit")
     sub = p.add_subparsers(dest="cmd", required=True)
 
     # Common parent parser for subcommands
