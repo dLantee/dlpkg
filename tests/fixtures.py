@@ -87,6 +87,24 @@ def make_pyproject_toml() -> str:
 
 
 @pytest.fixture
+def published_versions_dir(tmp_path):
+    """Creates <tmp_path>/publishes/my_package/{rel,dev}-<version> folders for `dlpkg list` tests.
+    Includes out-of-order versions (to verify sorting) and malformed folder names (to verify
+    they're skipped).
+    """
+    base = tmp_path / "publishes"
+    pkg_dir = base / "my_package"
+    pkg_dir.mkdir(parents=True)
+    for v in ["1.0.0", "1.2.5", "2.0.0", "1.9.0", "1.10.0"]:
+        (pkg_dir / f"rel-{v}").mkdir()
+    for v in ["1.2.3-alpha.1", "2.0.0-beta.1"]:
+        (pkg_dir / f"dev-{v}").mkdir()
+    (pkg_dir / "not-a-valid-format-here").mkdir()  # channel not in {rel, dev} -> skipped
+    (pkg_dir / "rel-not-semver").mkdir()           # unparsable version -> skipped
+    return base
+
+
+@pytest.fixture
 def temp_toml_package(tmp_path):
     # Create a temporary package structure
     root_dir = tmp_path / "test_package"
