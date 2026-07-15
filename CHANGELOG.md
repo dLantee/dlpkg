@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+- Renamed `install_dir` to `publish_dir` in `config.toml`'s `[defaults]` table (and
+  `ConfigToml.install_dir` → `ConfigToml.publish_dir`) for consistency with the `publish`
+  sub-command.
+
 ## [0.4.0] - 2026-07-14
 
 ### Added

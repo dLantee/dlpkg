@@ -194,7 +194,7 @@ def _scan_published_versions(folder: Path | str, package_name: str, limit: int =
 
 def _resolve_list_dir(dir_arg: str | None) -> Path:
     """Resolves the folder to scan for published versions using precedence:
-    --dir CLI flag > DLPKG_PUBLISH_DIR environment variable > config.toml [defaults].install_dir.
+    --dir CLI flag > DLPKG_PUBLISH_DIR environment variable > config.toml [defaults].publish_dir.
 
     Raises:
         RuntimeError: if none of the three sources provide a folder.
@@ -207,8 +207,8 @@ def _resolve_list_dir(dir_arg: str | None) -> Path:
         return Path(env_dir).resolve()
 
     config = ConfigToml.open_default()
-    if config.install_dir is not None:
-        return config.install_dir
+    if config.publish_dir is not None:
+        return config.publish_dir
 
     raise RuntimeError(
         "No folder to scan for published versions. Pass --dir PATH, set the "
@@ -221,9 +221,9 @@ def cmd_list(args: argparse.Namespace) -> int:
 
     if args.set_default_dir:
         config = ConfigToml.open_default()
-        config.install_dir = args.set_default_dir
+        config.publish_dir = args.set_default_dir
         config.save()
-        print(f"{CMD_FORMAT.GREEN}Default list folder set to: {config.install_dir}{CMD_FORMAT.END}")
+        print(f"{CMD_FORMAT.GREEN}Default list folder set to: {config.publish_dir}{CMD_FORMAT.END}")
         return 0
 
     if not args.package_name:

@@ -124,19 +124,19 @@ class ConfigToml(TomlFile):
             return None
 
     @property
-    def install_dir(self) -> Path | None:
-        """Reads [defaults].install_dir from config.toml. Returns None if unset/unreadable."""
+    def publish_dir(self) -> Path | None:
+        """Reads [defaults].publish_dir from config.toml. Returns None if unset/unreadable."""
         try:
-            return self._resolve_relative(str(self._doc["defaults"]["install_dir"]))
+            return self._resolve_relative(str(self._doc["defaults"]["publish_dir"]))
         except Exception:
             return None
 
-    @install_dir.setter
-    def install_dir(self, value: Path | str) -> None:
-        """Writes [defaults].install_dir into config.toml, creating the [defaults] table if needed."""
+    @publish_dir.setter
+    def publish_dir(self, value: Path | str) -> None:
+        """Writes [defaults].publish_dir into config.toml, creating the [defaults] table if needed."""
         if "defaults" not in self._doc:
             self._doc["defaults"] = tomlkit.table()
-        self._doc["defaults"]["install_dir"] = str(Path(value).resolve())
+        self._doc["defaults"]["publish_dir"] = str(Path(value).resolve())
 
 
 @dataclass()

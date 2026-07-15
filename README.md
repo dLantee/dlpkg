@@ -137,7 +137,7 @@ Shows up to the latest 10 `rel-*` (published) and `dev-*` (development) versions
 under `<folder>/<package_name>/`, sorted newest-first using semantic version ordering.
 
 The folder to scan is resolved in this order: `--dir` flag, then the `DLPKG_PUBLISH_DIR`
-environment variable, then the `install_dir` default saved via `--set-default-dir`.
+environment variable, then the `publish_dir` default saved via `--set-default-dir`.
 
 **Arguments & Flags:**
 - package_name : Required (unless `--set-default-dir` is given), name of the package to list versions for.
@@ -162,5 +162,5 @@ Report issues here: https://github.com/dLantee/dlpkg/issues
     by using the `--source-dir` flag and ensuring your `pyproject.toml`
     is properly configured.
 - Presets for build, distribution, and install folders?
-  - Edit `config.toml` (repo root). Set the `build_dir`/`install_dir` defaults according to your needs.
+  - Edit `config.toml` (repo root). Set the `build_dir`/`publish_dir` defaults according to your needs.
 

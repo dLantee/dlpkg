@@ -28,27 +28,27 @@ def test_read_data_from_pyproject(temp_toml_package):
 
 def test_config_open_or_create_missing_file(tmp_path):
     cfg = ConfigToml.open_or_create(tmp_path / "config.toml")
-    assert cfg.install_dir is None
+    assert cfg.publish_dir is None
     assert cfg.build_dir is None
     assert cfg._doc_path == (tmp_path / "config.toml").resolve()
 
 
 def test_config_reads_renamed_keys(tmp_path):
     path = tmp_path / "config.toml"
-    path.write_text('[defaults]\ninstall_dir = "D:/Extensions/maya/modules"\nbuild_dir = "./build"\n', encoding="utf-8")
+    path.write_text('[defaults]\npublish_dir = "D:/Extensions/maya/modules"\nbuild_dir = "./build"\n', encoding="utf-8")
     cfg = ConfigToml.open(path)
-    assert cfg.install_dir == Path("D:/Extensions/maya/modules").resolve()
+    assert cfg.publish_dir == Path("D:/Extensions/maya/modules").resolve()
     assert cfg.build_dir == (tmp_path / "build").resolve()
 
 
-def test_config_install_dir_roundtrip(tmp_path):
+def test_config_publish_dir_roundtrip(tmp_path):
     path = tmp_path / "config.toml"
     cfg = ConfigToml.open_or_create(path)
-    cfg.install_dir = tmp_path / "publishes"
+    cfg.publish_dir = tmp_path / "publishes"
     cfg.save()
 
     reopened = ConfigToml.open(path)
-    assert reopened.install_dir == (tmp_path / "publishes").resolve()
+    assert reopened.publish_dir == (tmp_path / "publishes").resolve()
 
 
 if __name__ == "__main__":
