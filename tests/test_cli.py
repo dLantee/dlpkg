@@ -125,7 +125,7 @@ def test_update_args_from_files_publish_out_dir_raises_if_no_config_and_no_env(m
         cli._update_args_from_files(args)
 
 def test_cmd_list_basic(capsys, published_versions_dir):
-    args = argparse.Namespace(package_name="my_package", dir=str(published_versions_dir), set_default_dir=None)
+    args = argparse.Namespace(package_name="my_package", dir=str(published_versions_dir), limit=None)
     rc = cli.cmd_list(args)
     assert rc == 0
     out = capsys.readouterr().out
@@ -145,7 +145,7 @@ def test_cmd_list_truncates_to_latest_10(tmp_path, capsys):
     pkg_dir.mkdir(parents=True)
     for i in range(15):
         (pkg_dir / f"rel-1.{i}.0").mkdir()
-    args = argparse.Namespace(package_name="my_package", dir=str(tmp_path / "publishes"), set_default_dir=None)
+    args = argparse.Namespace(package_name="my_package", dir=str(tmp_path / "publishes"), limit=None)
     rc = cli.cmd_list(args)
     assert rc == 0
     out = capsys.readouterr().out
@@ -156,7 +156,7 @@ def test_cmd_list_truncates_to_latest_10(tmp_path, capsys):
 
 
 def test_cmd_list_missing_folder_is_empty(tmp_path, capsys):
-    args = argparse.Namespace(package_name="ghost_pkg", dir=str(tmp_path / "does_not_exist"), set_default_dir=None)
+    args = argparse.Namespace(package_name="ghost_pkg", dir=str(tmp_path / "does_not_exist"), limit=None)
     rc = cli.cmd_list(args)
     assert rc == 0
     out = capsys.readouterr().out
@@ -164,46 +164,112 @@ def test_cmd_list_missing_folder_is_empty(tmp_path, capsys):
 
 
 def test_cmd_list_requires_package_name(tmp_path):
-    args = argparse.Namespace(package_name=None, dir=str(tmp_path), set_default_dir=None)
+    args = argparse.Namespace(package_name=None, dir=str(tmp_path), limit=None)
     with pytest.raises(RuntimeError, match="package_name"):
         cli.cmd_list(args)
 
 
-def test_cmd_list_set_default_dir_then_used_by_later_call(tmp_path, monkeypatch, capsys, published_versions_dir):
+def test_cmd_config_set_publish_dir_then_used_by_list(tmp_path, monkeypatch, capsys, published_versions_dir):
     monkeypatch.setattr(cli.ConfigToml, "DEFAULT_PATH", tmp_path / "cfg" / "config.toml")
     monkeypatch.delenv("DLPKG_PUBLISH_DIR", raising=False)
 
-    set_args = argparse.Namespace(package_name=None, dir=None, set_default_dir=str(published_versions_dir))
-    rc = cli.cmd_list(set_args)
+    set_args = argparse.Namespace(action="set", key="publish_dir", value=str(published_versions_dir))
+    rc = cli.cmd_config(set_args)
     assert rc == 0
     assert (tmp_path / "cfg" / "config.toml").exists()
 
-    list_args = argparse.Namespace(package_name="my_package", dir=None, set_default_dir=None)
+    list_args = argparse.Namespace(package_name="my_package", dir=None, limit=None)
     rc2 = cli.cmd_list(list_args)
     assert rc2 == 0
     assert "rel-2.0.0" in capsys.readouterr().out
 
 
+def test_cmd_config_get_unset_key_returns_1(monkeypatch, tmp_path, capsys):
+    monkeypatch.setattr(cli.ConfigToml, "DEFAULT_PATH", tmp_path / "cfg" / "config.toml")
+    args = argparse.Namespace(action="get", key="nope")
+    rc = cli.cmd_config(args)
+    assert rc == 1
+    assert "not set" in capsys.readouterr().out
+
+
+def test_cmd_config_set_then_get_roundtrip(monkeypatch, tmp_path, capsys):
+    monkeypatch.setattr(cli.ConfigToml, "DEFAULT_PATH", tmp_path / "cfg" / "config.toml")
+    set_args = argparse.Namespace(action="set", key="publish_dir", value=str(tmp_path / "publishes"))
+    assert cli.cmd_config(set_args) == 0
+    capsys.readouterr()
+
+    get_args = argparse.Namespace(action="get", key="publish_dir")
+    assert cli.cmd_config(get_args) == 0
+    out = capsys.readouterr().out.strip()
+    assert out == str((tmp_path / "publishes").resolve())
+
+
+def test_cmd_config_list_prints_key_value_lines(monkeypatch, tmp_path, capsys):
+    monkeypatch.setattr(cli.ConfigToml, "DEFAULT_PATH", tmp_path / "cfg" / "config.toml")
+    cli.cmd_config(argparse.Namespace(action="set", key="publish_dir", value=str(tmp_path / "publishes")))
+    cli.cmd_config(argparse.Namespace(action="set", key="list_limit", value="5"))
+    capsys.readouterr()
+
+    rc = cli.cmd_config(argparse.Namespace(action="list"))
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert f"publish_dir = {(tmp_path / 'publishes').resolve()}" in out
+    assert "list_limit = 5" in out
+
+
+def test_cmd_config_list_empty_says_no_settings(monkeypatch, tmp_path, capsys):
+    monkeypatch.setattr(cli.ConfigToml, "DEFAULT_PATH", tmp_path / "cfg" / "config.toml")
+    rc = cli.cmd_config(argparse.Namespace(action="list"))
+    assert rc == 0
+    assert "no settings configured" in capsys.readouterr().out
+
+
 def test_cmd_list_dir_flag_overrides_env_and_config(monkeypatch, tmp_path, published_versions_dir):
     monkeypatch.setattr(cli.ConfigToml, "DEFAULT_PATH", tmp_path / "unused_config.toml")
     monkeypatch.setenv("DLPKG_PUBLISH_DIR", str(tmp_path / "env_dir"))
-    args = argparse.Namespace(package_name="my_package", dir=str(published_versions_dir), set_default_dir=None)
+    args = argparse.Namespace(package_name="my_package", dir=str(published_versions_dir), limit=None)
     assert cli.cmd_list(args) == 0  # doesn't error even though env/config point elsewhere
 
 
 def test_cmd_list_env_var_used_when_no_dir_flag(monkeypatch, tmp_path, published_versions_dir):
     monkeypatch.setattr(cli.ConfigToml, "DEFAULT_PATH", tmp_path / "unused_config.toml")
     monkeypatch.setenv("DLPKG_PUBLISH_DIR", str(published_versions_dir))
-    args = argparse.Namespace(package_name="my_package", dir=None, set_default_dir=None)
+    args = argparse.Namespace(package_name="my_package", dir=None, limit=None)
     assert cli.cmd_list(args) == 0
 
 
 def test_cmd_list_raises_if_no_dir_env_or_config(monkeypatch, tmp_path):
     monkeypatch.setattr(cli.ConfigToml, "DEFAULT_PATH", tmp_path / "no_such_config.toml")
     monkeypatch.delenv("DLPKG_PUBLISH_DIR", raising=False)
-    args = argparse.Namespace(package_name="my_package", dir=None, set_default_dir=None)
+    args = argparse.Namespace(package_name="my_package", dir=None, limit=None)
     with pytest.raises(RuntimeError, match="DLPKG_PUBLISH_DIR"):
         cli.cmd_list(args)
+
+
+def test_cmd_list_limit_flag_overrides_config(monkeypatch, tmp_path, published_versions_dir):
+    monkeypatch.setattr(cli.ConfigToml, "DEFAULT_PATH", tmp_path / "cfg" / "config.toml")
+    config = cli.ConfigToml.open_default()
+    config.set_value("list_limit", 2)
+    config.save()
+
+    args = argparse.Namespace(package_name="my_package", dir=str(published_versions_dir), limit=1)
+    rc = cli.cmd_list(args)
+    assert rc == 0
+
+
+def test_cmd_list_uses_configured_list_limit_when_no_flag(monkeypatch, capsys, tmp_path, published_versions_dir):
+    monkeypatch.setattr(cli.ConfigToml, "DEFAULT_PATH", tmp_path / "cfg" / "config.toml")
+    config = cli.ConfigToml.open_default()
+    config.set_value("list_limit", 2)
+    config.save()
+
+    args = argparse.Namespace(package_name="my_package", dir=str(published_versions_dir), limit=None)
+    rc = cli.cmd_list(args)
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "latest 2" in out
+    rel_lines = [l for l in out.splitlines() if l.startswith("    rel-")]
+    assert len(rel_lines) == 2
 
 
 if __name__ == "__main__":

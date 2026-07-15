@@ -160,7 +160,10 @@ def cmd_publish(args: argparse.Namespace) -> int:
     return 0
 
 
-def _scan_published_versions(folder: Path | str, package_name: str, limit: int = 10) -> tuple[list[SemVer], list[SemVer]]:
+DEFAULT_LIST_LIMIT = 10
+
+
+def _scan_published_versions(folder: Path | str, package_name: str, limit: int = DEFAULT_LIST_LIMIT) -> tuple[list[SemVer], list[SemVer]]:
     """Scans <folder>/<package_name>/* for `rel-<version>` and `dev-<version>` subdirectories.
 
     Entries that don't match this shape, or whose version part fails to parse as SemVer, are
@@ -212,34 +215,77 @@ def _resolve_list_dir(dir_arg: str | None) -> Path:
 
     raise RuntimeError(
         "No folder to scan for published versions. Pass --dir PATH, set the "
-        "DLPKG_PUBLISH_DIR environment variable, or run `dlpkg list --set-default-dir PATH` first."
+        "DLPKG_PUBLISH_DIR environment variable, or run `dlpkg config set publish_dir PATH` first."
     )
+
+
+def _resolve_list_limit(limit_arg: int | None) -> int:
+    """Resolves the rel/dev version-count cutoff for `dlpkg list` using precedence:
+    --limit CLI flag > config.toml [defaults].list_limit > DEFAULT_LIST_LIMIT.
+    """
+    if limit_arg is not None:
+        return limit_arg
+
+    config = ConfigToml.open_default()
+    configured = config.get_value("list_limit")
+    if configured is not None:
+        try:
+            return int(configured)
+        except (TypeError, ValueError):
+            logger.warning("Ignoring non-integer list_limit in config.toml: %r", configured)
+
+    return DEFAULT_LIST_LIMIT
 
 
 def cmd_list(args: argparse.Namespace) -> int:
     logger.debug(f"cmd_list() args: {args}")
 
-    if args.set_default_dir:
-        config = ConfigToml.open_default()
-        config.publish_dir = args.set_default_dir
-        config.save()
-        print(f"{CMD_FORMAT.GREEN}Default list folder set to: {config.publish_dir}{CMD_FORMAT.END}")
-        return 0
-
     if not args.package_name:
-        raise RuntimeError("package_name is required unless --set-default-dir is given.")
+        raise RuntimeError("package_name is required.")
 
     folder = _resolve_list_dir(args.dir)
-    rel_versions, dev_versions = _scan_published_versions(folder, args.package_name)
+    limit = _resolve_list_limit(args.limit)
+    rel_versions, dev_versions = _scan_published_versions(folder, args.package_name, limit=limit)
 
-    lines = [f"{CMD_FORMAT.BOLD}Published versions (latest 10):{CMD_FORMAT.END}"]
+    lines = [f"{CMD_FORMAT.BOLD}Published versions (latest {limit}):{CMD_FORMAT.END}"]
     lines.extend(f"    rel-{v}" for v in rel_versions)
     lines.append("")
-    lines.append(f"{CMD_FORMAT.BOLD}Development versions (latest 10):{CMD_FORMAT.END}")
+    lines.append(f"{CMD_FORMAT.BOLD}Development versions (latest {limit}):{CMD_FORMAT.END}")
     lines.extend(f"    dev-{v}" for v in dev_versions)
 
     print("\n".join(lines))
     return 0
+
+
+def cmd_config(args: argparse.Namespace) -> int:
+    """Implements `dlpkg config get|set|list` (git-config style) against config.toml."""
+    logger.debug(f"cmd_config() args: {args}")
+    config = ConfigToml.open_default()
+
+    if args.action == "list":
+        values = config.all_values()
+        if not values:
+            print("(no settings configured)")
+            return 0
+        for key, value in values.items():
+            print(f"{key} = {value}")
+        return 0
+
+    if args.action == "get":
+        value = config.get_value(args.key)
+        if value is None:
+            print(f"{CMD_FORMAT.YELLOW}{args.key} is not set{CMD_FORMAT.END}")
+            return 1
+        print(value)
+        return 0
+
+    if args.action == "set":
+        config.set_value(args.key, args.value)
+        config.save()
+        print(f"{CMD_FORMAT.GREEN}{args.key} = {config.get_value(args.key)}{CMD_FORMAT.END}")
+        return 0
+
+    raise RuntimeError(f"Unknown config action: {args.action!r}")
 
 
 def main() -> int:
@@ -281,14 +327,29 @@ def main() -> int:
 
     # -- list
     p_list = sub.add_parser("list", help="List published versions of a package.")
-    p_list.add_argument("package_name", nargs="?", default=None,
-                         help="Name of the package to list published versions for (required unless --set-default-dir is given).")
+    p_list.add_argument("package_name", help="Name of the package to list published versions for.")
     p_list.add_argument("--dir", default=None,
                          help="Folder to scan for published packages (same folder passed to `publish --out-dir`). "
                               "Overrides DLPKG_PUBLISH_DIR and the config.toml default.")
-    p_list.add_argument("--set-default-dir", default=None, metavar="PATH",
-                         help="Save PATH as the default folder to scan (written to config.toml) and exit.")
+    p_list.add_argument("--limit", type=int, default=None,
+                         help="Max number of rel/dev versions to show. "
+                              "Overrides config.toml list_limit (default: 10).")
     p_list.set_defaults(func=cmd_list)
+
+    # -- config
+    p_config = sub.add_parser("config", help="Get/set/list dlpkg settings stored in config.toml.")
+    config_sub = p_config.add_subparsers(dest="action", required=True)
+
+    p_config_get = config_sub.add_parser("get", help="Print the value of a setting.")
+    p_config_get.add_argument("key", help="Setting name, e.g. publish_dir or list_limit")
+
+    p_config_set = config_sub.add_parser("set", help="Set and save a setting.")
+    p_config_set.add_argument("key", help="Setting name, e.g. publish_dir or list_limit")
+    p_config_set.add_argument("value", help="Value to store")
+
+    config_sub.add_parser("list", help="Print all configured settings.")
+
+    p_config.set_defaults(func=cmd_config)
 
     # -- write-mod file
     # p_mod = sub.add_parser("writemod", parents=[base_parser], help="Write a .mod file into the first MAYA_MODULE_PATH dir")

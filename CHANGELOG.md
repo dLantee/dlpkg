@@ -4,10 +4,17 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- Added `config` sub-command (`dlpkg config get|set|list`) for viewing and setting
+  `config.toml` values, git-config style.
+- Added `--limit` flag and a `list_limit` config setting to control how many `rel-`/`dev-`
+  versions `dlpkg list` shows (previously hardcoded to 10).
+
 ### Changed
 - Renamed `install_dir` to `publish_dir` in `config.toml`'s `[defaults]` table (and
   `ConfigToml.install_dir` → `ConfigToml.publish_dir`) for consistency with the `publish`
   sub-command.
+- Removed `list --set-default-dir`; use `dlpkg config set publish_dir PATH` instead.
 
 ## [0.4.0] - 2026-07-14
 

@@ -51,5 +51,38 @@ def test_config_publish_dir_roundtrip(tmp_path):
     assert reopened.publish_dir == (tmp_path / "publishes").resolve()
 
 
+def test_get_value_missing_key_returns_default(tmp_path):
+    cfg = ConfigToml.open_or_create(tmp_path / "config.toml")
+    assert cfg.get_value("list_limit") is None
+    assert cfg.get_value("list_limit", default=10) == 10
+
+
+def test_get_value_set_value_roundtrip_non_path_key_is_int(tmp_path):
+    path = tmp_path / "config.toml"
+    cfg = ConfigToml.open_or_create(path)
+    cfg.set_value("list_limit", "20")
+    cfg.save()
+
+    reopened = ConfigToml.open(path)
+    value = reopened.get_value("list_limit")
+    assert value == 20
+    assert isinstance(value, int)
+
+
+def test_all_values_returns_resolved_settings(tmp_path):
+    path = tmp_path / "config.toml"
+    cfg = ConfigToml.open_or_create(path)
+    cfg.publish_dir = tmp_path / "publishes"
+    cfg.set_value("build_dir", tmp_path / "build")
+    cfg.set_value("list_limit", "5")
+    cfg.save()
+
+    reopened = ConfigToml.open(path)
+    values = reopened.all_values()
+    assert values["publish_dir"] == (tmp_path / "publishes").resolve()
+    assert values["build_dir"] == (tmp_path / "build").resolve()
+    assert values["list_limit"] == 5
+
+
 if __name__ == "__main__":
     pytest.main([__file__])

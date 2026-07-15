@@ -8,7 +8,7 @@ import tomlkit
 import logging
 from .versioning import SemVer
 
-from typing import ClassVar, List
+from typing import Any, ClassVar, List
 
 logger = logging.getLogger(__name__)
 
@@ -102,6 +102,10 @@ class ConfigToml(TomlFile):
 
     DEFAULT_PATH: ClassVar[Path] = Path(__file__).resolve().parent.parent.parent / "config.toml"
 
+    # Keys under [defaults] that hold a filesystem path and therefore need
+    # _resolve_relative() treatment on read and Path(...).resolve() normalization on write.
+    _PATH_KEYS: ClassVar[frozenset[str]] = frozenset({"build_dir", "publish_dir"})
+
     @classmethod
     def open_default(cls) -> "ConfigToml":
         """Opens (or, if missing, starts an empty in-memory) config.toml at the fixed
@@ -115,28 +119,57 @@ class ConfigToml(TomlFile):
         base = self._doc_path.parent if self._doc_path else Path(".")
         return (base / raw).resolve()
 
+    def get_value(self, key: str, default: Any = None) -> Any:
+        """Generic getter for [defaults].<key>. Path keys (_PATH_KEYS) are resolved via
+        _resolve_relative(); other keys are returned as their raw parsed TOML value.
+        Returns `default` if the [defaults] table or key is missing, or if resolution fails."""
+        try:
+            raw = self._doc["defaults"][key]
+        except Exception:
+            return default
+        if key in self._PATH_KEYS:
+            try:
+                return self._resolve_relative(str(raw))
+            except Exception:
+                return default
+        return raw
+
+    def set_value(self, key: str, value: Any) -> None:
+        """Generic setter for [defaults].<key>, creating the [defaults] table if needed.
+        Path keys are normalized to an absolute path string. Numeric-looking strings (e.g.
+        CLI-supplied "10") are coerced to int; other values are stored as-is."""
+        if "defaults" not in self._doc:
+            self._doc["defaults"] = tomlkit.table()
+        if key in self._PATH_KEYS:
+            self._doc["defaults"][key] = str(Path(value).resolve())
+            return
+        if isinstance(value, str):
+            try:
+                value = int(value)
+            except ValueError:
+                pass
+        self._doc["defaults"][key] = value
+
+    def all_values(self) -> dict[str, Any]:
+        """Returns every currently-set [defaults] key, resolved the same way get_value()
+        would resolve it. Empty dict if [defaults] is missing/empty."""
+        defaults = self._doc.get("defaults", {})
+        return {key: self.get_value(key) for key in defaults.keys()}
+
     @property
     def build_dir(self) -> Path | None:
         """Reads [defaults].build_dir from config.toml. Returns None if unset/unreadable."""
-        try:
-            return self._resolve_relative(str(self._doc["defaults"]["build_dir"]))
-        except Exception:
-            return None
+        return self.get_value("build_dir")
 
     @property
     def publish_dir(self) -> Path | None:
         """Reads [defaults].publish_dir from config.toml. Returns None if unset/unreadable."""
-        try:
-            return self._resolve_relative(str(self._doc["defaults"]["publish_dir"]))
-        except Exception:
-            return None
+        return self.get_value("publish_dir")
 
     @publish_dir.setter
     def publish_dir(self, value: Path | str) -> None:
         """Writes [defaults].publish_dir into config.toml, creating the [defaults] table if needed."""
-        if "defaults" not in self._doc:
-            self._doc["defaults"] = tomlkit.table()
-        self._doc["defaults"]["publish_dir"] = str(Path(value).resolve())
+        self.set_value("publish_dir", value)
 
 
 @dataclass()

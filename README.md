@@ -137,17 +137,45 @@ Shows up to the latest 10 `rel-*` (published) and `dev-*` (development) versions
 under `<folder>/<package_name>/`, sorted newest-first using semantic version ordering.
 
 The folder to scan is resolved in this order: `--dir` flag, then the `DLPKG_PUBLISH_DIR`
-environment variable, then the `publish_dir` default saved via `--set-default-dir`.
+environment variable, then the `publish_dir` setting saved via `dlpkg config set publish_dir`.
+The number of versions shown is resolved the same way: `--limit` flag, then the `list_limit`
+setting, then the default of 10.
 
 **Arguments & Flags:**
-- package_name : Required (unless `--set-default-dir` is given), name of the package to list versions for.
+- package_name : Required, name of the package to list versions for.
 - --dir : Optional flag, folder to scan for published packages (same folder passed to `publish --out-dir`).
-- --set-default-dir : Optional flag, saves PATH as the default folder to scan (written to `config.toml`) and exits.
+- --limit : Optional flag, max number of rel/dev versions to show (default: 10, or the configured `list_limit`).
 
 ```commandline
 dlpkg list my_package --dir X:/publishes
-dlpkg list --set-default-dir X:/publishes
+dlpkg list my_package --limit 5
+dlpkg config set publish_dir X:/publishes
 dlpkg list my_package
+```
+
+### Config
+
+`dlpkg config <get|set|list> [key] [value]`
+
+Get, set, or list `dlpkg`'s own settings, stored in `config.toml` (repo root). This is a
+git-config-style interface to the same settings you could otherwise edit in `config.toml`
+directly — useful for scripting or when you don't want to hand-edit the TOML file.
+
+**Actions:**
+- `dlpkg config get <key>` : Print the current value of a setting, or a "not set" message
+  (and exit code 1) if it's unset.
+- `dlpkg config set <key> <value>` : Set and save a setting.
+- `dlpkg config list` : Print every currently-set setting as `key = value` lines.
+
+Currently supported keys: `publish_dir` (default folder for `dlpkg list` / `dlpkg publish`),
+`build_dir` (default output folder for `dlpkg build`), `list_limit` (default version-count
+cutoff for `dlpkg list`).
+
+```commandline
+dlpkg config set publish_dir X:/publishes
+dlpkg config set list_limit 20
+dlpkg config get publish_dir
+dlpkg config list
 ```
 
 ## Contributing
@@ -162,5 +190,6 @@ Report issues here: https://github.com/dLantee/dlpkg/issues
     by using the `--source-dir` flag and ensuring your `pyproject.toml`
     is properly configured.
 - Presets for build, distribution, and install folders?
-  - Edit `config.toml` (repo root). Set the `build_dir`/`publish_dir` defaults according to your needs.
+  - Use `dlpkg config set build_dir <path>` / `dlpkg config set publish_dir <path>`, or edit
+    `config.toml` (repo root) directly.
 
