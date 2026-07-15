@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
 - Renamed `default_paths.toml` to `config.toml` and fixed `ConfigToml`'s stale key names
   (`distribution_dir`/`publish_dir`) to match the file's actual keys (`build_dir`/`install_dir`).
   `dlpkg list` now reads/writes `install_dir` as its default folder.
+- Renamed `install` sub-command to `publish` for clarity.
 
 ## [0.3.3] - 2026-07-14
 
