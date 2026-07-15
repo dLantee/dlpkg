@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+- `dlpkg publish` now respects `config.toml`'s `publish_dir` when `--out-dir` isn't passed
+  (previously `--out-dir` always defaulted to the hardcoded `./publish`, so the configured
+  `publish_dir` was silently ignored). Resolution now follows `--out-dir` > `DLPKG_PUBLISH_DIR`
+  env var > `config.toml publish_dir` > `./publish`, matching `dlpkg list`'s existing precedence.
+
 ## [0.5.1] - 2026-07-15
 - Clean git history
 
