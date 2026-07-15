@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.5.2] - 2026-07-15
+
 ### Fixed
 - `dlpkg publish` now respects `config.toml`'s `publish_dir` when `--out-dir` isn't passed
   (previously `--out-dir` always defaulted to the hardcoded `./publish`, so the configured
