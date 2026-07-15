@@ -9,6 +9,8 @@ All notable changes to this project will be documented in this file.
   `config.toml` values, git-config style.
 - Added `--limit` flag and a `list_limit` config setting to control how many `rel-`/`dev-`
   versions `dlpkg list` shows (previously hardcoded to 10).
+- `dlpkg list` now shows each version's publish timestamp (read from the version folder's
+  filesystem creation time) alongside its version number.
 
 ### Changed
 - Renamed `install_dir` to `publish_dir` in `config.toml`'s `[defaults]` table (and
