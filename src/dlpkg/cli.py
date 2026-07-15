@@ -4,6 +4,7 @@ CLI entry point for dlpkg.
 from __future__ import annotations
 
 import argparse
+import os
 import re
 from pathlib import Path
 import logging
@@ -11,6 +12,7 @@ import logging
 from dlpkg import __version__
 from dlpkg.versioning import SemVer
 from dlpkg.package import PythonPackage
+from dlpkg.tomlutil import ConfigToml
 from dlpkg.util import ensure_empty_dir, run, make_read_only_recursively
 
 logger = logging.getLogger(__name__)
@@ -158,6 +160,88 @@ def cmd_publish(args: argparse.Namespace) -> int:
     return 0
 
 
+def _scan_published_versions(folder: Path | str, package_name: str, limit: int = 10) -> tuple[list[SemVer], list[SemVer]]:
+    """Scans <folder>/<package_name>/* for `rel-<version>` and `dev-<version>` subdirectories.
+
+    Entries that don't match this shape, or whose version part fails to parse as SemVer, are
+    silently skipped.
+
+    Returns (rel_versions, dev_versions), each sorted newest-first and truncated to `limit`
+    entries. Returns ([], []) if <folder>/<package_name> doesn't exist.
+    """
+    pkg_dir = Path(folder) / package_name
+    rel_versions: list[SemVer] = []
+    dev_versions: list[SemVer] = []
+    if not pkg_dir.is_dir():
+        return rel_versions, dev_versions
+
+    for entry in pkg_dir.iterdir():
+        if not entry.is_dir():
+            continue
+        channel, _, version_str = entry.name.partition("-")
+        if channel not in ("rel", "dev"):
+            continue
+        try:
+            ver = SemVer.parse(version_str)
+        except ValueError:
+            continue
+        (rel_versions if channel == "rel" else dev_versions).append(ver)
+
+    rel_versions.sort(reverse=True)
+    dev_versions.sort(reverse=True)
+    return rel_versions[:limit], dev_versions[:limit]
+
+
+def _resolve_list_dir(dir_arg: str | None) -> Path:
+    """Resolves the folder to scan for published versions using precedence:
+    --dir CLI flag > DLPKG_PUBLISH_DIR environment variable > config.toml [defaults].install_dir.
+
+    Raises:
+        RuntimeError: if none of the three sources provide a folder.
+    """
+    if dir_arg:
+        return Path(dir_arg).resolve()
+
+    env_dir = os.environ.get("DLPKG_PUBLISH_DIR")
+    if env_dir:
+        return Path(env_dir).resolve()
+
+    config = ConfigToml.open_default()
+    if config.install_dir is not None:
+        return config.install_dir
+
+    raise RuntimeError(
+        "No folder to scan for published versions. Pass --dir PATH, set the "
+        "DLPKG_PUBLISH_DIR environment variable, or run `dlpkg list --set-default-dir PATH` first."
+    )
+
+
+def cmd_list(args: argparse.Namespace) -> int:
+    logger.debug(f"cmd_list() args: {args}")
+
+    if args.set_default_dir:
+        config = ConfigToml.open_default()
+        config.install_dir = args.set_default_dir
+        config.save()
+        print(f"{CMD_FORMAT.GREEN}Default list folder set to: {config.install_dir}{CMD_FORMAT.END}")
+        return 0
+
+    if not args.package_name:
+        raise RuntimeError("package_name is required unless --set-default-dir is given.")
+
+    folder = _resolve_list_dir(args.dir)
+    rel_versions, dev_versions = _scan_published_versions(folder, args.package_name)
+
+    lines = [f"{CMD_FORMAT.BOLD}Published versions (latest 10):{CMD_FORMAT.END}"]
+    lines.extend(f"    rel-{v}" for v in rel_versions)
+    lines.append("")
+    lines.append(f"{CMD_FORMAT.BOLD}Development versions (latest 10):{CMD_FORMAT.END}")
+    lines.extend(f"    dev-{v}" for v in dev_versions)
+
+    print("\n".join(lines))
+    return 0
+
+
 def main() -> int:
     p = argparse.ArgumentParser(prog="dlpkg", add_help=False)
     p.add_argument("-h", "--help", action=_HelpWithVersionAction, help="show this help message and exit")
@@ -194,6 +278,17 @@ def main() -> int:
     # p_pub.add_argument("--dist-dir", default='./dist', help=f"Install from wheel file or dist folder (default: ./dist). If a dist folder is given, the first .whl file inside will be used.")
     p_pub.add_argument("--dry-run", action="store_true", help=f"Print publish plan without copying files")
     p_pub.set_defaults(func=cmd_publish)
+
+    # -- list
+    p_list = sub.add_parser("list", help="List published versions of a package.")
+    p_list.add_argument("package_name", nargs="?", default=None,
+                         help="Name of the package to list published versions for (required unless --set-default-dir is given).")
+    p_list.add_argument("--dir", default=None,
+                         help="Folder to scan for published packages (same folder passed to `install --out-dir`). "
+                              "Overrides DLPKG_PUBLISH_DIR and the config.toml default.")
+    p_list.add_argument("--set-default-dir", default=None, metavar="PATH",
+                         help="Save PATH as the default folder to scan (written to config.toml) and exit.")
+    p_list.set_defaults(func=cmd_list)
 
     # -- write-mod file
     # p_mod = sub.add_parser("writemod", parents=[base_parser], help="Write a .mod file into the first MAYA_MODULE_PATH dir")

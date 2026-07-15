@@ -128,6 +128,28 @@ dlpkg publish --out-dir X:/publishes --channel dev
 dlpkg publish --out-dir X:/publishes --dry-run
 ```
 
+### List
+
+`dlpkg list [options] package_name`
+
+List published versions of a package previously installed with `dlpkg install --out-dir`.
+Shows up to the latest 10 `rel-*` (published) and `dev-*` (development) versions found
+under `<folder>/<package_name>/`, sorted newest-first using semantic version ordering.
+
+The folder to scan is resolved in this order: `--dir` flag, then the `DLPKG_PUBLISH_DIR`
+environment variable, then the `install_dir` default saved via `--set-default-dir`.
+
+**Arguments & Flags:**
+- package_name : Required (unless `--set-default-dir` is given), name of the package to list versions for.
+- --dir : Optional flag, folder to scan for published packages (same folder passed to `install --out-dir`).
+- --set-default-dir : Optional flag, saves PATH as the default folder to scan (written to `config.toml`) and exits.
+
+```commandline
+dlpkg list my_package --dir X:/publishes
+dlpkg list --set-default-dir X:/publishes
+dlpkg list my_package
+```
+
 ## Contributing
 Home page: https://github.com/dLantee/dlpkg \
 Report issues here: https://github.com/dLantee/dlpkg/issues
@@ -140,5 +162,5 @@ Report issues here: https://github.com/dLantee/dlpkg/issues
     by using the `--source-dir` flag and ensuring your `pyproject.toml`
     is properly configured.
 - Presets for build, distribution, and install folders?
-  - Edit `dlpkg/default_paths.toml`. Set the distribution, and install folders according to your needs.
+  - Edit `config.toml` (repo root). Set the `build_dir`/`install_dir` defaults according to your needs.
 
