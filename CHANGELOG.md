@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-07-14
+
 ### Added
 - Added `list` sub-command to display published versions of a package.
 
