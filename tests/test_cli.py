@@ -61,6 +61,53 @@ def test_publish_basic(tmp_path, temp_toml_package: Path):
     assert rc == 0
 
 
+def test_resolve_publish_out_dir_flag_overrides_env_and_config(monkeypatch, tmp_path):
+    monkeypatch.setattr(cli.ConfigToml, "DEFAULT_PATH", tmp_path / "unused_config.toml")
+    monkeypatch.setenv("DLPKG_PUBLISH_DIR", str(tmp_path / "env_dir"))
+    flag_dir = tmp_path / "flag_dir"
+    assert cli._resolve_publish_out_dir(str(flag_dir)) == flag_dir.resolve()
+
+
+def test_resolve_publish_out_dir_env_var_used_when_no_flag(monkeypatch, tmp_path):
+    monkeypatch.setattr(cli.ConfigToml, "DEFAULT_PATH", tmp_path / "unused_config.toml")
+    env_dir = tmp_path / "env_dir"
+    monkeypatch.setenv("DLPKG_PUBLISH_DIR", str(env_dir))
+    assert cli._resolve_publish_out_dir(None) == env_dir.resolve()
+
+
+def test_resolve_publish_out_dir_uses_config_publish_dir(monkeypatch, tmp_path):
+    monkeypatch.setattr(cli.ConfigToml, "DEFAULT_PATH", tmp_path / "cfg" / "config.toml")
+    monkeypatch.delenv("DLPKG_PUBLISH_DIR", raising=False)
+    config_dir = tmp_path / "configured_publishes"
+    config = cli.ConfigToml.open_default()
+    config.publish_dir = config_dir
+    config.save()
+
+    assert cli._resolve_publish_out_dir(None) == config_dir.resolve()
+
+
+def test_resolve_publish_out_dir_falls_back_to_local_publish_folder(monkeypatch, tmp_path):
+    monkeypatch.setattr(cli.ConfigToml, "DEFAULT_PATH", tmp_path / "no_such_config.toml")
+    monkeypatch.delenv("DLPKG_PUBLISH_DIR", raising=False)
+    assert cli._resolve_publish_out_dir(None) == Path(cli.DEFAULT_PUBLISH_DIR).resolve()
+
+
+def test_cmd_publish_uses_configured_publish_dir_when_no_out_dir_flag(monkeypatch, tmp_path, capsys, temp_toml_package: Path):
+    monkeypatch.setattr(cli.ConfigToml, "DEFAULT_PATH", tmp_path / "cfg" / "config.toml")
+    monkeypatch.delenv("DLPKG_PUBLISH_DIR", raising=False)
+    config_dir = tmp_path / "configured_publishes"
+    config = cli.ConfigToml.open_default()
+    config.publish_dir = config_dir
+    config.save()
+
+    args = argparse.Namespace(source_path=str(temp_toml_package), out_dir=None, channel="rel", dry_run=True, read_only=False)
+    rc = cli.cmd_publish(args)
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert config_dir.resolve().as_posix() in out
+    assert not (tmp_path / "publish").exists()  # never touches the ./publish fallback
+
+
 def test_update_args_from_files_publish_out_dir_uses_config_publish_dir(monkeypatch, tmp_path: Path):
     class FakePyProject:
         project_name = "MyProject"

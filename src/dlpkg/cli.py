@@ -83,6 +83,28 @@ def cmd_build(args: argparse.Namespace) -> int:
     return 0
 
 
+DEFAULT_PUBLISH_DIR = "./publish"
+
+
+def _resolve_publish_out_dir(out_dir_arg: str | None) -> Path:
+    """Resolves the target root folder for `dlpkg publish` using precedence:
+    --out-dir CLI flag > DLPKG_PUBLISH_DIR environment variable >
+    config.toml [defaults].publish_dir > ./publish (local fallback).
+    """
+    if out_dir_arg:
+        return Path(out_dir_arg).resolve()
+
+    env_dir = os.environ.get("DLPKG_PUBLISH_DIR")
+    if env_dir:
+        return Path(env_dir).resolve()
+
+    config = ConfigToml.open_default()
+    if config.publish_dir is not None:
+        return config.publish_dir
+
+    return Path(DEFAULT_PUBLISH_DIR).resolve()
+
+
 def cmd_publish(args: argparse.Namespace) -> int:
     override = False
     root_dir = Path(args.source_path).resolve()
@@ -118,7 +140,8 @@ def cmd_publish(args: argparse.Namespace) -> int:
     else:
         raise RuntimeError(f"Invalid source path: {args.source_path}. Must be a package root directory or a wheel file.")
 
-    dst_path = (Path(args.out_dir) / name / f"{args.channel}-{version}").resolve()
+    out_dir = _resolve_publish_out_dir(args.out_dir)
+    dst_path = (out_dir / name / f"{args.channel}-{version}").resolve()
 
     msg = [
         # "="*40,
@@ -323,7 +346,10 @@ def main() -> int:
     # -- publish
     p_pub = sub.add_parser("publish", help="Publish package files into a target root")
     p_pub.add_argument("source_path", nargs="?", default='.', help=f"Source wheel file or dist folder (default: first .whl in dist folder)")
-    p_pub.add_argument("--out-dir", default="./publish", help=f"Target root folder. E.g. This is where the package will be published.")
+    p_pub.add_argument("--out-dir", default=None,
+                        help="Target root folder. E.g. This is where the package will be published. "
+                             "Overrides DLPKG_PUBLISH_DIR and the config.toml default. "
+                             "Falls back to ./publish if none of those are set.")
     # p_pub.add_argument("--name", help="Package name (default: read from pyproject)")
     # p_pub.add_argument("--version", help="Override version (default: read from pyproject)")
     p_pub.add_argument("--channel", choices=["rel", "dev"], default="rel")
