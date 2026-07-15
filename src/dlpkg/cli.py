@@ -298,8 +298,8 @@ def main() -> int:
     # Use sys.argv (user input) by default, but can be overridden for testing
     args = p.parse_args()
 
-    print(f"main() args: {args}")
-    logger.debug(f"main() args: {args}")
+    # print(f"main() args: {args}")
+    # logger.debug(f"main() args: {args}")
 
     return int(args.func(args))
 
