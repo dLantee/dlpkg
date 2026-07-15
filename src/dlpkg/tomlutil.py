@@ -8,7 +8,7 @@ import tomlkit
 import logging
 from .versioning import SemVer
 
-from typing import List
+from typing import ClassVar, List
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +62,21 @@ class TomlFile:
         self._doc = tomlkit.parse(file_path.read_text(encoding="utf-8"))
         self._doc_path = file_path
 
+    @classmethod
+    def open_or_create(cls, file_path: Path | str) -> TomlFile:
+        """Opens a TOML document from file if it exists; otherwise returns a new instance
+        with an empty document and `_doc_path` set to file_path, so a later `.save()` call
+        writes to that path.
+        """
+        instance = cls()
+        if isinstance(file_path, str):
+            file_path = Path(file_path).resolve()
+        try:
+            instance.load(file_path)
+        except FileNotFoundError:
+            instance._doc_path = file_path
+        return instance
+
     def save(self):
         """Writes the current toml document to the original path used for parsing (doc_path).
 
@@ -71,32 +86,57 @@ class TomlFile:
         self.save_as(self._doc_path)
 
     def save_as(self, file_path: Path | str) -> None:
-        """Writes the current toml document to file.
+        """Writes the current toml document to file, creating parent directories if needed.
         """
         if isinstance(file_path, str):
             file_path = Path(file_path).resolve()
+        file_path.parent.mkdir(parents=True, exist_ok=True)
         file_path.write_text(tomlkit.dumps(self._doc), encoding="utf-8")
 
 
 @dataclass()
 class ConfigToml(TomlFile):
-    """Utility for reading/writing config.toml files"""
+    """Utility for reading/writing dlpkg's own config.toml (repo-root-level default settings,
+    e.g. the default folder `dlpkg list` scans for published packages).
+    """
+
+    DEFAULT_PATH: ClassVar[Path] = Path(__file__).resolve().parent.parent.parent / "config.toml"
+
+    @classmethod
+    def open_default(cls) -> "ConfigToml":
+        """Opens (or, if missing, starts an empty in-memory) config.toml at the fixed
+        default location (repo root)."""
+        return cls.open_or_create(cls.DEFAULT_PATH)
+
+    def _resolve_relative(self, raw: str) -> Path:
+        """Resolves a path from config.toml relative to the config file's own directory
+        (not the process's current working directory), consistent with how PyProjectToml
+        resolves source_roots relative to the pyproject.toml directory."""
+        base = self._doc_path.parent if self._doc_path else Path(".")
+        return (base / raw).resolve()
 
     @property
-    def dist_dir(self) -> Path:
-        """Reads distribution folder from config.toml"""
+    def build_dir(self) -> Path | None:
+        """Reads [defaults].build_dir from config.toml. Returns None if unset/unreadable."""
         try:
-            return Path(str(self._doc["defaults"]["distribution_dir"])).resolve()
-        except Exception as e:
-            raise RuntimeError("Could not read dist_folder from config.toml") from e
+            return self._resolve_relative(str(self._doc["defaults"]["build_dir"]))
+        except Exception:
+            return None
 
     @property
-    def install_dir(self) -> Path:
-        """Reads publish folder from config.toml"""
+    def install_dir(self) -> Path | None:
+        """Reads [defaults].install_dir from config.toml. Returns None if unset/unreadable."""
         try:
-            return Path(str(self._doc["defaults"]["publish_dir"])).resolve()
-        except Exception as e:
-            raise RuntimeError("Could not read install folder from config.toml") from e
+            return self._resolve_relative(str(self._doc["defaults"]["install_dir"]))
+        except Exception:
+            return None
+
+    @install_dir.setter
+    def install_dir(self, value: Path | str) -> None:
+        """Writes [defaults].install_dir into config.toml, creating the [defaults] table if needed."""
+        if "defaults" not in self._doc:
+            self._doc["defaults"] = tomlkit.table()
+        self._doc["defaults"]["install_dir"] = str(Path(value).resolve())
 
 
 @dataclass()
