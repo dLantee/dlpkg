@@ -1,5 +1,6 @@
 from __future__ import annotations
 import pytest
+import re
 import tomlkit
 import argparse
 from pathlib import Path
@@ -133,9 +134,11 @@ def test_cmd_list_basic(capsys, published_versions_dir):
     assert "Development versions (latest 10):" in out
     # semver order, not string order (2.0.0 > 1.10.0 > 1.9.0 > 1.2.5 > 1.0.0)
     rel_lines = [line for line in out.splitlines() if line.startswith("    rel-")]
-    assert rel_lines == ["    rel-2.0.0", "    rel-1.10.0", "    rel-1.9.0", "    rel-1.2.5", "    rel-1.0.0"]
-    assert "    dev-2.0.0-beta.1" in out
-    assert "    dev-1.2.3-alpha.1" in out
+    rel_labels = [line.split()[0] for line in rel_lines]
+    assert rel_labels == ["rel-2.0.0", "rel-1.10.0", "rel-1.9.0", "rel-1.2.5", "rel-1.0.0"]
+    assert all(re.search(r"\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}\]", line) for line in rel_lines)
+    assert any(line.startswith("    dev-2.0.0-beta.1") for line in out.splitlines())
+    assert any(line.startswith("    dev-1.2.3-alpha.1") for line in out.splitlines())
     assert "not-a-valid-format-here" not in out
     assert "not-semver" not in out
 
