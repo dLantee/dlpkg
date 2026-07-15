@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import os
 import re
+from datetime import datetime
 from pathlib import Path
 import logging
 
@@ -163,18 +164,19 @@ def cmd_publish(args: argparse.Namespace) -> int:
 DEFAULT_LIST_LIMIT = 10
 
 
-def _scan_published_versions(folder: Path | str, package_name: str, limit: int = DEFAULT_LIST_LIMIT) -> tuple[list[SemVer], list[SemVer]]:
+def _scan_published_versions(folder: Path | str, package_name: str, limit: int = DEFAULT_LIST_LIMIT) -> tuple[list[tuple[SemVer, datetime]], list[tuple[SemVer, datetime]]]:
     """Scans <folder>/<package_name>/* for `rel-<version>` and `dev-<version>` subdirectories.
 
     Entries that don't match this shape, or whose version part fails to parse as SemVer, are
     silently skipped.
 
-    Returns (rel_versions, dev_versions), each sorted newest-first and truncated to `limit`
-    entries. Returns ([], []) if <folder>/<package_name> doesn't exist.
+    Returns (rel_versions, dev_versions), each a list of (version, published_at) pairs sorted
+    newest-first by version and truncated to `limit` entries. `published_at` is the folder's
+    filesystem creation time. Returns ([], []) if <folder>/<package_name> doesn't exist.
     """
     pkg_dir = Path(folder) / package_name
-    rel_versions: list[SemVer] = []
-    dev_versions: list[SemVer] = []
+    rel_versions: list[tuple[SemVer, datetime]] = []
+    dev_versions: list[tuple[SemVer, datetime]] = []
     if not pkg_dir.is_dir():
         return rel_versions, dev_versions
 
@@ -188,11 +190,17 @@ def _scan_published_versions(folder: Path | str, package_name: str, limit: int =
             ver = SemVer.parse(version_str)
         except ValueError:
             continue
-        (rel_versions if channel == "rel" else dev_versions).append(ver)
+        published_at = datetime.fromtimestamp(entry.stat().st_ctime)
+        (rel_versions if channel == "rel" else dev_versions).append((ver, published_at))
 
-    rel_versions.sort(reverse=True)
-    dev_versions.sort(reverse=True)
+    rel_versions.sort(key=lambda pair: pair[0], reverse=True)
+    dev_versions.sort(key=lambda pair: pair[0], reverse=True)
     return rel_versions[:limit], dev_versions[:limit]
+
+
+def _format_list_line(prefix: str, version: SemVer, published_at: datetime) -> str:
+    label = f"{prefix}-{version}"
+    return f"    {label:<22}[{published_at.strftime('%Y-%m-%d %H:%M')}]"
 
 
 def _resolve_list_dir(dir_arg: str | None) -> Path:
@@ -248,10 +256,10 @@ def cmd_list(args: argparse.Namespace) -> int:
     rel_versions, dev_versions = _scan_published_versions(folder, args.package_name, limit=limit)
 
     lines = [f"{CMD_FORMAT.BOLD}Published versions (latest {limit}):{CMD_FORMAT.END}"]
-    lines.extend(f"    rel-{v}" for v in rel_versions)
+    lines.extend(_format_list_line("rel", v, ts) for v, ts in rel_versions)
     lines.append("")
     lines.append(f"{CMD_FORMAT.BOLD}Development versions (latest {limit}):{CMD_FORMAT.END}")
-    lines.extend(f"    dev-{v}" for v in dev_versions)
+    lines.extend(_format_list_line("dev", v, ts) for v, ts in dev_versions)
 
     print("\n".join(lines))
     return 0
