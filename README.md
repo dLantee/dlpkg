@@ -132,7 +132,7 @@ dlpkg publish --out-dir X:/publishes --dry-run
 
 `dlpkg list [options] package_name`
 
-List published versions of a package previously installed with `dlpkg install --out-dir`.
+List published versions of a package previously published with `dlpkg publish --out-dir`.
 Shows up to the latest 10 `rel-*` (published) and `dev-*` (development) versions found
 under `<folder>/<package_name>/`, sorted newest-first using semantic version ordering.
 
@@ -141,7 +141,7 @@ environment variable, then the `install_dir` default saved via `--set-default-di
 
 **Arguments & Flags:**
 - package_name : Required (unless `--set-default-dir` is given), name of the package to list versions for.
-- --dir : Optional flag, folder to scan for published packages (same folder passed to `install --out-dir`).
+- --dir : Optional flag, folder to scan for published packages (same folder passed to `publish --out-dir`).
 - --set-default-dir : Optional flag, saves PATH as the default folder to scan (written to `config.toml`) and exits.
 
 ```commandline

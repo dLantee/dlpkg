@@ -99,7 +99,7 @@ def cmd_publish(args: argparse.Namespace) -> int:
         src_path = pkg_info.root_dir
     elif '.whl' in root_dir.suffixes:
         # If source_path is not a directory, we assume it's a wheel file and try to parse package info from the file name.
-        # This is a bit hacky but allows us to support installing directly from a wheel file without needing to specify the package name and version separately.
+        # This is a bit hacky but allows us to support publishing directly from a wheel file without needing to specify the package name and version separately.
         wheel_path = Path(args.source_path).resolve()
         wheel_pattern = re.compile(
             r'^(?P<name>[^-]+)-'
@@ -275,7 +275,7 @@ def main() -> int:
     p_pub.add_argument("--channel", choices=["rel", "dev"], default="rel")
     p_pub.add_argument("--read-only", action="store_true", help="Set read-only permissions on the published files")
     # p_pub.add_argument("--write-mod", action="store_true", help="Write a .mod file into the first MAYA_MODULE_PATH dir")
-    # p_pub.add_argument("--dist-dir", default='./dist', help=f"Install from wheel file or dist folder (default: ./dist). If a dist folder is given, the first .whl file inside will be used.")
+    # p_pub.add_argument("--dist-dir", default='./dist', help=f"Publish from wheel file or dist folder (default: ./dist). If a dist folder is given, the first .whl file inside will be used.")
     p_pub.add_argument("--dry-run", action="store_true", help=f"Print publish plan without copying files")
     p_pub.set_defaults(func=cmd_publish)
 
@@ -284,7 +284,7 @@ def main() -> int:
     p_list.add_argument("package_name", nargs="?", default=None,
                          help="Name of the package to list published versions for (required unless --set-default-dir is given).")
     p_list.add_argument("--dir", default=None,
-                         help="Folder to scan for published packages (same folder passed to `install --out-dir`). "
+                         help="Folder to scan for published packages (same folder passed to `publish --out-dir`). "
                               "Overrides DLPKG_PUBLISH_DIR and the config.toml default.")
     p_list.add_argument("--set-default-dir", default=None, metavar="PATH",
                          help="Save PATH as the default folder to scan (written to config.toml) and exit.")
