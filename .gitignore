@@ -207,3 +207,7 @@ marimo/_lsp/
 __marimo__/
 
 # AI related
+/plans/
+/reports/
+/.claude/settings.local.json
+/.claude/scheduled_tasks.lock
