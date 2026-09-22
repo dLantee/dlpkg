@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-09-22
+
 ### Changed
 - `pytest` runs without `PYTHONPATH`: `pyproject.toml` puts `src` on the path and the shared
   fixtures moved to `tests/conftest.py`.
@@ -113,6 +115,8 @@ All notable changes to this project will be documented in this file.
 - Initial release of dlpkg.
 
 
+[Unreleased]: https://github.com/dLantee/dlpkg/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/dLantee/dlpkg/compare/v0.5.2...v0.6.0
 [#7]: https://github.com/dLantee/dlpkg/issues/7
 [#10]: https://github.com/dLantee/dlpkg/issues/10
 [#15]: https://github.com/dLantee/dlpkg/issues/15
