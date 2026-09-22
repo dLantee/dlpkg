@@ -36,4 +36,3 @@ There is no configured lint/typecheck command (no ruff/mypy config present).
 
 - `.claude/structure.md`: module layout, what each file does, conventions.
 - `.claude/testing.md`: how to run the tests, and which tests are known to be broken.
-- `.claude/git-workflow.md`: where dlpkg's own version is copied, release test command.
