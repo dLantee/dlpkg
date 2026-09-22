@@ -4,6 +4,24 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+- `pytest` runs without `PYTHONPATH`: `pyproject.toml` puts `src` on the path and the shared
+  fixtures moved to `tests/conftest.py`.
+- Internal cleanup: `init_version` split into `read_init_version` and `write_init_version`,
+  `dlpkg publish` and `dlpkg list` share one publish-dir lookup, `_scan_published_versions`
+  returns a dict keyed by channel, defaults and names are module constants, dead code and
+  commented-out experiments removed.
+
+### Fixed
+- `dlpkg version --bump` no longer fails when the source tree has no `__init__.py` or no
+  `__version__` in it; `pyproject.toml` is updated and the `__init__.py` write is best effort.
+- `SemVer` hashing now ignores build metadata, matching its equality.
+- Broken tests that targeted removed code were fixed or deleted; the suite is green.
+
+### Removed
+- Unused helpers `copytree`, `is_git_repo`, `get_source_root`, `get_pyproject_root` and the
+  `verbose` flag of `init_version`.
+
 ## [0.5.2] - 2026-07-15
 
 ### Fixed

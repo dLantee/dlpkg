@@ -19,8 +19,7 @@ dlpkg bumps itself: `dlpkg version --bump <patch|minor|major>` run in the repo r
 ## Test command
 
 ```
-PYTHONPATH=tests pytest
+pytest
 ```
 
-from the repo root. See `.claude/testing.md` for why `PYTHONPATH` is needed and which tests are
-known to fail.
+from the repo root. See `.claude/testing.md` for details and the slow test to skip while iterating.

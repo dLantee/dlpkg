@@ -1,13 +1,11 @@
-from __future__ import annotations
-import pytest
-import re
-import tomlkit
 import argparse
+import re
 from pathlib import Path
-from fixtures import temp_toml_package, published_versions_dir # This import creates a temporary package structure for testing
+
+import pytest
+import tomlkit
+
 import dlpkg.cli as cli
-
-
 
 
 def test_cmd_version_query(capsys, temp_toml_package):
@@ -21,30 +19,25 @@ def test_cmd_version_bump(capsys, temp_toml_package):
 
     def _read_doc():
         with open(str(temp_toml_package / "pyproject.toml"), "rb") as f:
-            data = tomlkit.load(f)
-            return data
+            return tomlkit.load(f)
 
-    # bump - patch
     args = argparse.Namespace(root_dir=str(temp_toml_package), bump="patch")
     rc = cli.cmd_version(args)
     assert rc == 0
     assert "1.2.5 -> 1.2.6" in capsys.readouterr().out
-    doc = _read_doc()
-    assert doc["project"]["version"] == "1.2.6"
-    # bump - minor
+    assert _read_doc()["project"]["version"] == "1.2.6"
+
     args = argparse.Namespace(root_dir=str(temp_toml_package), bump="minor")
     rc = cli.cmd_version(args)
     assert rc == 0
     assert "1.2.6 -> 1.3.0" in capsys.readouterr().out
-    doc = _read_doc()
-    assert doc["project"]["version"] == "1.3.0"
-    # bump major
+    assert _read_doc()["project"]["version"] == "1.3.0"
+
     args = argparse.Namespace(root_dir=str(temp_toml_package), bump="major")
     rc = cli.cmd_version(args)
     assert rc == 0
     assert "1.3.0 -> 2.0.0" in capsys.readouterr().out
-    doc = _read_doc()
-    assert doc["project"]["version"] == "2.0.0"
+    assert _read_doc()["project"]["version"] == "2.0.0"
 
 
 def test_cmd_build(tmp_path: Path, temp_toml_package: Path):
@@ -55,10 +48,24 @@ def test_cmd_build(tmp_path: Path, temp_toml_package: Path):
     assert any(dist_path.glob("*.whl"))  # check that wheel file is created
 
 
-def test_publish_basic(tmp_path, temp_toml_package: Path):
-    args = argparse.Namespace(root_dir=str(temp_toml_package), out_dir=str(tmp_path))
-    rc = cli.cmd_publish(args)
+def _publish_args(source_path: Path, out_dir: Path, dry_run: bool) -> argparse.Namespace:
+    return argparse.Namespace(source_path=str(source_path), out_dir=str(out_dir), channel="rel",
+                              dry_run=dry_run, read_only=False)
+
+
+def test_publish_dry_run_prints_target(tmp_path, capsys, temp_toml_package: Path):
+    out_dir = tmp_path / "out"
+    rc = cli.cmd_publish(_publish_args(temp_toml_package, out_dir, dry_run=True))
     assert rc == 0
+    assert (out_dir / "test_package" / "rel-1.2.5").as_posix() in capsys.readouterr().out
+    assert not out_dir.exists()
+
+
+def test_publish_refuses_existing_target(tmp_path, temp_toml_package: Path):
+    out_dir = tmp_path / "out"
+    (out_dir / "test_package" / "rel-1.2.5").mkdir(parents=True)
+    with pytest.raises(FileExistsError):
+        cli.cmd_publish(_publish_args(temp_toml_package, out_dir, dry_run=False))
 
 
 def test_resolve_publish_out_dir_flag_overrides_env_and_config(monkeypatch, tmp_path):
@@ -107,70 +114,6 @@ def test_cmd_publish_uses_configured_publish_dir_when_no_out_dir_flag(monkeypatc
     assert config_dir.resolve().as_posix() in out
     assert not (tmp_path / "publish").exists()  # never touches the ./publish fallback
 
-
-def test_update_args_from_files_publish_out_dir_uses_config_publish_dir(monkeypatch, tmp_path: Path):
-    class FakePyProject:
-        project_name = "MyProject"
-        project_version = "0.1.0"
-
-        def source_roots(self):
-            return [Path("src")]
-
-    class FakeConfig:
-        publish_dir = tmp_path / "publishes"
-
-    monkeypatch.setattr(cli, "_get_pyproject_doc", lambda root: FakePyProject())
-    monkeypatch.setattr(cli, "_get_config_doc", lambda root: FakeConfig())
-
-    args = argparse.Namespace(cmd="publish", root_dir=str(tmp_path), name=None, source_dir=None, version=None, out_dir=None)
-    updated = cli._update_args_from_files(args)
-
-    assert updated.out_dir == str(FakeConfig.publish_dir)
-
-
-def test_update_args_from_files_publish_out_dir_falls_back_to_maya_module_path(monkeypatch, tmp_path: Path):
-    class FakePyProject:
-        project_name = "MyProject"
-        project_version = "0.1.0"
-
-        def source_roots(self):
-            return [Path("src")]
-
-    monkeypatch.setattr(cli, "_get_pyproject_doc", lambda root: FakePyProject())
-
-    def raise_file_not_found(root):
-        raise FileNotFoundError
-
-    monkeypatch.setattr(cli, "_get_config_doc", raise_file_not_found)
-    monkeypatch.setenv("MAYA_MODULE_PATH", str(tmp_path / "mayaModules") + ";" + str(tmp_path / "other"))
-
-    args = argparse.Namespace(cmd="publish", root_dir=str(tmp_path), name=None, source_dir=None, version=None, out_dir=None)
-    updated = cli._update_args_from_files(args)
-
-    # Note: cli splits on whitespace, not os.pathsep
-    assert updated.out_dir == str(tmp_path / "mayaModules")
-
-
-def test_update_args_from_files_publish_out_dir_raises_if_no_config_and_no_env(monkeypatch, tmp_path: Path):
-    class FakePyProject:
-        project_name = "MyProject"
-        project_version = "0.1.0"
-
-        def source_roots(self):
-            return [Path("src")]
-
-    monkeypatch.setattr(cli, "_get_pyproject_doc", lambda root: FakePyProject())
-
-    def raise_file_not_found(root):
-        raise FileNotFoundError
-
-    monkeypatch.setattr(cli, "_get_config_doc", raise_file_not_found)
-    monkeypatch.delenv("MAYA_MODULE_PATH", raising=False)
-
-    args = argparse.Namespace(cmd="publish", root_dir=str(tmp_path), name=None, source_dir=None, version=None, out_dir=None)
-
-    with pytest.raises(RuntimeError, match="MAYA_MODULE_PATH"):
-        cli._update_args_from_files(args)
 
 def test_cmd_list_basic(capsys, published_versions_dir):
     args = argparse.Namespace(package_name="my_package", dir=str(published_versions_dir), limit=None)
@@ -320,7 +263,3 @@ def test_cmd_list_uses_configured_list_limit_when_no_flag(monkeypatch, capsys, t
     assert "latest 2" in out
     rel_lines = [l for l in out.splitlines() if l.startswith("    rel-")]
     assert len(rel_lines) == 2
-
-
-if __name__ == "__main__":
-    pytest.main([__file__])

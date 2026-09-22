@@ -1,36 +1,23 @@
 # dlpkg tests
 
-Tests use `pytest`. It is installed in the active venv (`D:\Dev\venvs\python313`) but not in
-`py -3.10` or `py -3.14`; run `pip install pytest` in whichever environment you test with. There is
-no `pytest.ini`, `tox.ini` or dev-requirements file; pytest config is entirely default.
+Tests use `pytest`. It is installed in the shared venv `D:\Dev\venvs\python313` but not in
+`py -3.10` or `py -3.14`; run `pip install pytest` in whichever environment you test with.
 
 ## Running
 
-Tests import shared fixtures with a bare `from fixtures import temp_toml_package`, not a relative
-import. `tests/__init__.py` exists (empty) so `tests/` is a package, which makes pytest's default
-`prepend` import mode add the repo root to `sys.path`, not `tests/`. A plain `pytest` therefore
-fails with `ModuleNotFoundError: No module named 'fixtures'`. Put `tests/` on `PYTHONPATH`:
-
 ```commandline
-PYTHONPATH=tests pytest                                        # all tests (bash / git-bash)
-PYTHONPATH=tests pytest tests/test_versioning.py               # one file
-PYTHONPATH=tests pytest tests/test_versioning.py::test_bump    # one test
+pytest                                          # all tests
+pytest tests/test_versioning.py                 # one file
+pytest tests/test_versioning.py::test_bump      # one test
 ```
 
-On PowerShell: `$env:PYTHONPATH = "tests"; pytest`.
+`pyproject.toml`'s `[tool.pytest.ini_options]` sets `pythonpath = ["src"]` and
+`testpaths = ["tests"]`, so no `PYTHONPATH` is needed. `src` goes first on the path on purpose:
+the venv's editable install of dlpkg points at the main checkout, and without this a test run
+inside a worktree would silently exercise the main checkout's code instead of the worktree's.
 
-Do not add relative imports to `fixtures`; that breaks under this setup too.
+Shared fixtures (`temp_toml_package`, `published_versions_dir`) live in `tests/conftest.py` and
+are auto-loaded; do not import them.
 
-## Known-broken tests
-
-Pre-existing, verified via `git stash`. They are not a spec for current behaviour.
-
-- `tests/test_publisher.py` imports `from dlpkg.publisher import publish_folder`, but
-  `publisher.py` was deleted in the 0.3.0 refactor (its logic moved into `cli.py`'s
-  `cmd_publish`). Fails on collection.
-- `test_publish_basic` (`test_cli.py`) builds its `argparse.Namespace` with `root_dir=...`, but
-  `cmd_publish` reads `args.source_path`. Fails with `AttributeError`.
-- `test_update_args_from_files_publish_out_dir_uses_config_publish_dir`,
-  `..._falls_back_to_maya_module_path` and `..._raises_if_no_config_and_no_env` (`test_cli.py`)
-  reference `cli._get_pyproject_doc`, `cli._get_config_doc` and `cli._update_args_from_files`,
-  none of which exist in current `cli.py`. Fail with `AttributeError`.
+`test_cmd_build` is slow: it upgrades pip and build and runs a real build. Skip it while iterating
+with `--deselect tests/test_cli.py::test_cmd_build`, and run the full suite once before committing.

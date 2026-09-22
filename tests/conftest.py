@@ -1,14 +1,10 @@
 import pytest
 import tomlkit
-from pathlib import Path
 
 
 def make_pyproject_toml() -> str:
     doc = tomlkit.document()
 
-    # -------------------------
-    # [build-system]
-    # -------------------------
     build_system = tomlkit.table()
     build_system.add("requires", ["setuptools>=68", "wheel"])
     build_system.add("build-backend", "setuptools.build_meta")
@@ -16,9 +12,6 @@ def make_pyproject_toml() -> str:
 
     doc.add(tomlkit.nl())
 
-    # -------------------------
-    # [project]
-    # -------------------------
     project = tomlkit.table()
     project.add("name", "my_project_name")
     project.add("version", "1.2.5")
@@ -37,9 +30,6 @@ def make_pyproject_toml() -> str:
     doc.add(tomlkit.nl())
     doc.add(tomlkit.nl())
 
-    # -------------------------
-    # [tool.setuptools]
-    # -------------------------
     tool = tomlkit.table()
     setuptools_tbl = tomlkit.table()
 
@@ -52,9 +42,6 @@ def make_pyproject_toml() -> str:
 
     doc.add(tomlkit.nl())
 
-    # -------------------------
-    # [tool.setuptools.packages.find]
-    # -------------------------
     packages_tbl = tomlkit.table()
     find_tbl = tomlkit.table()
 
@@ -106,44 +93,14 @@ def published_versions_dir(tmp_path):
 
 @pytest.fixture
 def temp_toml_package(tmp_path):
-    # Create a temporary package structure
+    """Creates <tmp_path>/test_package with a pyproject.toml and src/my_package/__init__.py."""
     root_dir = tmp_path / "test_package"
     root_dir.mkdir()
     src_dir = root_dir / "src"
     src_dir.mkdir()
-    readme_path = root_dir / "README.md"
-    readme_path.touch()
+    (root_dir / "README.md").touch()
     package_dir = src_dir / "my_package"
     package_dir.mkdir()
-    init_file = package_dir / "__init__.py"
-    init_file.write_text("__version__ = '1.2.5'", encoding="utf-8")
-    # Create pyproject.toml with the expected structure
-    doc_str = make_pyproject_toml()
-    pyproject = root_dir / "pyproject.toml"
-    pyproject.write_text(doc_str, encoding="utf-8")
+    (package_dir / "__init__.py").write_text("__version__ = '1.2.5'", encoding="utf-8")
+    (root_dir / "pyproject.toml").write_text(make_pyproject_toml(), encoding="utf-8")
     return root_dir
-
-
-# @pytest.fixture
-# def temp_toml_package_missing_pyproject(tmp_path):
-#     # Create a temporary package structure
-#     root_dir = tmp_path / "test_package"
-#     root_dir.mkdir()
-#     src_dir = root_dir / "src"
-#     src_dir.mkdir()
-#     readme_path = root_dir / "README.md"
-#     readme_path.touch()
-#     init_file = src_dir / "__init__.py"
-#     init_file.write_text("__version__ = '1.2.5'", encoding="utf-8")
-#     return root_dir
-#
-# @pytest.fixture
-# def temp_toml_package_multiple_src_name(tmp_path):
-#     # Create a temporary package structure
-#     root_dir = tmp_path / "test_package"
-#     root_dir.mkdir()
-#     src_dir = root_dir / "src"
-#     src_dir.mkdir()
-#     init_file = src_dir / "__init__.py"
-#     init_file.write_text("__version__ = '1.2.5'", encoding="utf-8")
-#     return root_dir

@@ -1,9 +1,5 @@
 # dlpkg
 
-## Overrides
-
-- Tests use `pytest` (overrides the `tools/` default of `unittest`). See `.claude/testing.md`.
-
 ## What this is
 
 `dlpkg` is a Python CLI tool (installed as the `dlpkg` command via `[project.scripts]`) for

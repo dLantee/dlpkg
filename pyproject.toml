@@ -23,3 +23,7 @@ where = ["src"]
 exclude = ["tests*", "docs*", "examples*", "images*", "README*", "LICENSE*",
   "*.toml", "dist*", "build*"
 ]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]

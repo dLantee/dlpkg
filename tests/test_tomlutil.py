@@ -1,26 +1,21 @@
-import pytest
 from pathlib import Path
 
 from dlpkg.tomlutil import TomlFile, PyProjectToml, ConfigToml
-from fixtures import temp_toml_package
 
 
 def test_tomldata_write_n_read(temp_toml_package):
-    toml_file_path = temp_toml_package / "pyproject.toml"
-    # Read back the file to verify
-    doc = TomlFile.open(toml_file_path)
+    doc = TomlFile.open(temp_toml_package / "pyproject.toml")
     assert doc['project']['name'] == "my_project_name"
     assert doc['project']['version'] == "1.2.5"
     assert doc['project']['authors'] == [{'name': 'John Doe', 'email': 'asd@qwe.com'}]
 
+
 def test_read_data_from_pyproject(temp_toml_package):
-    toml_file_path = temp_toml_package / "pyproject.toml"
-    # Read back the file to verify
-    doc = PyProjectToml.open(toml_file_path)
+    doc = PyProjectToml.open(temp_toml_package / "pyproject.toml")
     assert doc.project_name == "my_project_name"
     assert doc.project_version == "1.2.5"
     assert doc.authors == ["John Doe"]
-    assert doc.source_roots == [temp_toml_package / "my_package" / "src"]
+    assert doc.source_roots == [temp_toml_package / "src"]
 
     doc.project_version = "1.3.0"
     assert doc.project_version == "1.3.0"
@@ -82,7 +77,3 @@ def test_all_values_returns_resolved_settings(tmp_path):
     assert values["publish_dir"] == (tmp_path / "publishes").resolve()
     assert values["build_dir"] == (tmp_path / "build").resolve()
     assert values["list_limit"] == 5
-
-
-if __name__ == "__main__":
-    pytest.main([__file__])
