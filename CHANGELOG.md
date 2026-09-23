@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-09-22
+
 ### Added
 - `dlpkg publish` writes a `dlpkg.toml` metadata file into every published version folder with
   the package name, channel, version, publish time and git commit.
@@ -141,7 +143,8 @@ All notable changes to this project will be documented in this file.
 - Initial release of dlpkg.
 
 
-[Unreleased]: https://github.com/dLantee/dlpkg/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/dLantee/dlpkg/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/dLantee/dlpkg/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/dLantee/dlpkg/compare/v0.5.2...v0.6.0
 [#7]: https://github.com/dLantee/dlpkg/issues/7
 [#10]: https://github.com/dLantee/dlpkg/issues/10
