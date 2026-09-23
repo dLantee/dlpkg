@@ -7,13 +7,18 @@ import argparse
 import logging
 import os
 import re
-from datetime import datetime
+from datetime import date
 from pathlib import Path
 
 from dlpkg import __version__
+from dlpkg.changelog import CHANGELOG_FILE, release_changelog
+from dlpkg.modfile import (MAYA_MODULE_PATH_ENV, first_maya_module_dir, mod_file_path, read_mod_target,
+                           write_mod_file)
 from dlpkg.package import PythonPackage
+from dlpkg.published import (CHANNELS, DEV_CHANNEL, METADATA_FILE, REL_CHANNEL, PublishedVersion, find_published,
+                             remove_published, scan_published, with_build_tag, write_metadata)
 from dlpkg.tomlutil import ConfigToml
-from dlpkg.util import ensure_empty_dir, make_read_only_recursively, run
+from dlpkg.util import ensure_empty_dir, git, git_is_clean, git_short_hash, make_read_only_recursively, run
 from dlpkg.versioning import SemVer
 
 logger = logging.getLogger(__name__)
@@ -23,11 +28,13 @@ DEFAULT_PUBLISH_DIR = "./publish"
 DEFAULT_BUILD_DIR = "./build"
 DEFAULT_LIST_LIMIT = 10
 LIST_LIMIT_KEY = "list_limit"
+DEFAULT_PRUNE_KEEP = 3
+RELEASE_COMMIT_FORMAT = "Release {tag}"
+RELEASE_BUMP_PARTS = ["major", "minor", "patch"]
 
-# Publish channel -> heading printed by `dlpkg list`. Published folders are named <channel>-<version>.
-CHANNELS = {"rel": "Published versions", "dev": "Development versions"}
 LIST_TIMESTAMP_FORMAT = "%Y-%m-%d %H:%M"
 LIST_LABEL_WIDTH = 22
+ACTIVE_MARKER = "(active)"
 
 _WHEEL_NAME_RE = re.compile(r'^(?P<name>[^-]+)-(?P<version>[^-]+)-(?P<python>py[^-]+)-[^-]+-[^-]+$')
 
@@ -71,9 +78,52 @@ def cmd_version(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_release(args: argparse.Namespace) -> int:
+    """Bumps the version, dates the changelog's Unreleased section, commits `Release vX.Y.Z` and
+    tags it. Never pushes."""
+    logger.debug("cmd_release() args: %s", args)
+    pkg_info = PythonPackage(args.root_dir)
+    root = pkg_info.root_dir
+    changelog_path = root / CHANGELOG_FILE
+    if not changelog_path.is_file():
+        raise RuntimeError(f"No {CHANGELOG_FILE} in {root}")
+    if not git_is_clean(root):
+        raise RuntimeError(f"{root} has uncommitted changes; commit them before releasing.")
+
+    current = SemVer.parse(pkg_info.version)
+    new_version = str(current.bump(args.bump))
+    tag = f"v{new_version}"
+    new_changelog = release_changelog(changelog_path.read_text(encoding="utf-8"), new_version, date.today())
+
+    print('\n'.join([
+        f"{CMD_FORMAT.BOLD}* Releasing {pkg_info.name}:{CMD_FORMAT.END}",
+        f"version: {current} -> {new_version}",
+        f"changelog: {changelog_path.as_posix()}",
+        f"commit: {RELEASE_COMMIT_FORMAT.format(tag=tag)}",
+        f"tag: {tag}",
+    ]))
+    if args.dry_run:
+        return 0
+
+    pkg_info.version = new_version
+    changelog_path.write_text(new_changelog, encoding="utf-8")
+    git(["add", "--update", "."], root)
+    git(["commit", "-m", RELEASE_COMMIT_FORMAT.format(tag=tag)], root)
+    git(["tag", "-a", tag, "-m", new_version], root)
+    print(f"{CMD_FORMAT.GREEN}Released {tag}. Nothing was pushed: push the commit and the tag when ready.{CMD_FORMAT.END}")
+    return 0
+
+
+def _resolve_build_dir(out_dir_arg: str | None) -> Path:
+    """Output folder for `dlpkg build`: --out-dir flag > config.toml [defaults].build_dir > DEFAULT_BUILD_DIR."""
+    if out_dir_arg:
+        return Path(out_dir_arg).resolve()
+    return ConfigToml.open_default().build_dir or Path(DEFAULT_BUILD_DIR).resolve()
+
+
 def cmd_build(args: argparse.Namespace) -> int:
     src_dir = Path(args.root_dir).resolve()
-    out_dir = Path(args.out_dir).resolve()
+    out_dir = _resolve_build_dir(args.out_dir)
     ensure_empty_dir(out_dir)
 
     run(["python", "-m", "pip", "install", "--upgrade", "pip"])
@@ -116,6 +166,22 @@ def _resolve_list_dir(dir_arg: str | None) -> Path:
     return folder
 
 
+def _resolve_mod_dir() -> Path:
+    """Folder Maya .mod files are written into:
+    config.toml [defaults].mod_dir > first existing dir on MAYA_MODULE_PATH.
+
+    Raises:
+        RuntimeError: if neither provides one.
+    """
+    mod_dir = ConfigToml.open_default().mod_dir or first_maya_module_dir()
+    if mod_dir is None:
+        raise RuntimeError(
+            f"No folder to write the .mod file into. Set the {MAYA_MODULE_PATH_ENV} environment "
+            "variable to an existing folder, or run `dlpkg config set mod_dir PATH` first."
+        )
+    return mod_dir
+
+
 def _package_source(source_path: str) -> tuple[str, str, Path]:
     """Returns (name, version, path) for a package root dir or a .whl file.
 
@@ -137,8 +203,12 @@ def _package_source(source_path: str) -> tuple[str, str, Path]:
 
 def cmd_publish(args: argparse.Namespace) -> int:
     name, version, src_path = _package_source(args.source_path)
+    commit = git_short_hash(src_path)
+    if args.channel == DEV_CHANNEL and src_path.is_dir():
+        version = with_build_tag(version, commit)
     out_dir = _resolve_publish_out_dir(args.out_dir)
     dst_path = (out_dir / name / f"{args.channel}-{version}").resolve()
+    mod_dir = _resolve_mod_dir() if args.write_mod else None
 
     print('\n'.join([
         f"{CMD_FORMAT.BOLD}* Publishing package:{CMD_FORMAT.END}",
@@ -147,7 +217,7 @@ def cmd_publish(args: argparse.Namespace) -> int:
         f"channel: {args.channel}",
         f"source: {src_path.as_posix()}",
         f"target dir: {dst_path.as_posix()}",
-    ]))
+    ] + ([f"mod file: {mod_file_path(mod_dir, name).as_posix()}"] if mod_dir else [])))
 
     if args.dry_run:
         return 0
@@ -157,51 +227,31 @@ def cmd_publish(args: argparse.Namespace) -> int:
 
     # pip copies only what pyproject.toml declares (src layout, excludes, etc.).
     run(["python", "-m", "pip", "install", src_path.as_posix(), "--target", dst_path.as_posix()])
+    write_metadata(dst_path, name, args.channel, version, commit)
 
     if args.read_only:
         make_read_only_recursively(dst_path)
 
-    # if args.write_mod:
-    #     _write_mod_file(dst, args.name, args.version)
-
     print(f"{CMD_FORMAT.GREEN}Successfully published {name} package to: {dst_path}{CMD_FORMAT.END}")
+    if mod_dir:
+        mod_path = write_mod_file(mod_dir, name, version, dst_path)
+        print(f"{CMD_FORMAT.GREEN}Wrote mod file: {mod_path}{CMD_FORMAT.END}")
     return 0
 
 
-def _scan_published_versions(folder: Path | str, package_name: str,
-                             limit: int = DEFAULT_LIST_LIMIT) -> dict[str, list[tuple[SemVer, datetime]]]:
-    """Scans <folder>/<package_name>/<channel>-<version> folders for every channel in CHANNELS.
-
-    Entries with an unknown channel or an unparsable version are skipped. Returns, per channel,
-    (version, published_at) pairs sorted newest-first and truncated to `limit`. `published_at`
-    is the folder's filesystem creation time. Every channel is present, possibly empty.
-    """
-    pkg_dir = Path(folder) / package_name
-    found: dict[str, list[tuple[SemVer, datetime]]] = {channel: [] for channel in CHANNELS}
-    if not pkg_dir.is_dir():
-        return found
-
-    for entry in pkg_dir.iterdir():
-        if not entry.is_dir():
-            continue
-        channel, _, version_str = entry.name.partition("-")
-        if channel not in found:
-            continue
-        try:
-            ver = SemVer.parse(version_str)
-        except ValueError:
-            continue
-        found[channel].append((ver, datetime.fromtimestamp(entry.stat().st_ctime)))
-
-    for versions in found.values():
-        versions.sort(key=lambda pair: pair[0], reverse=True)
-        del versions[limit:]
-    return found
+def _active_mod_target(package_name: str) -> Path | None:
+    """The folder <name>.mod currently points at, or None when there is no mod dir or mod file."""
+    mod_dir = ConfigToml.open_default().mod_dir or first_maya_module_dir()
+    if mod_dir is None:
+        return None
+    return read_mod_target(mod_file_path(mod_dir, package_name))
 
 
-def _format_list_line(channel: str, version: SemVer, published_at: datetime) -> str:
-    label = f"{channel}-{version}"
-    return f"    {label:<{LIST_LABEL_WIDTH}}[{published_at.strftime(LIST_TIMESTAMP_FORMAT)}]"
+def _format_list_line(published: PublishedVersion, active: bool = False) -> str:
+    line = f"    {published.label:<{LIST_LABEL_WIDTH}}[{published.published_at.strftime(LIST_TIMESTAMP_FORMAT)}]"
+    if active:
+        line += f"  {CMD_FORMAT.GREEN}{ACTIVE_MARKER}{CMD_FORMAT.END}"
+    return line
 
 
 def _resolve_list_limit(limit_arg: int | None) -> int:
@@ -226,14 +276,56 @@ def cmd_list(args: argparse.Namespace) -> int:
 
     folder = _resolve_list_dir(args.dir)
     limit = _resolve_list_limit(args.limit)
-    found = _scan_published_versions(folder, args.package_name, limit=limit)
+    found = scan_published(folder, args.package_name, limit=limit)
+    active = _active_mod_target(args.package_name)
 
     sections = []
     for channel, heading in CHANNELS.items():
         lines = [f"{CMD_FORMAT.BOLD}{heading} (latest {limit}):{CMD_FORMAT.END}"]
-        lines.extend(_format_list_line(channel, ver, ts) for ver, ts in found[channel])
+        lines.extend(_format_list_line(published, published.path.resolve() == active)
+                     for published in found[channel])
         sections.append("\n".join(lines))
     print("\n\n".join(sections))
+    return 0
+
+
+def cmd_prune(args: argparse.Namespace) -> int:
+    """Deletes all but the newest --keep versions of one channel, never the active one."""
+    logger.debug("cmd_prune() args: %s", args)
+    if args.keep < 0:
+        raise ValueError("--keep must be 0 or more")
+    folder = _resolve_list_dir(args.dir)
+    versions = scan_published(folder, args.package_name)[args.channel]
+    active = _active_mod_target(args.package_name)
+    stale = [p for p in versions[args.keep:] if p.path.resolve() != active]
+
+    if not stale:
+        print(f"Nothing to prune: {len(versions)} {args.channel} version(s) of {args.package_name}, keeping {args.keep}.")
+        return 0
+
+    print(f"{CMD_FORMAT.BOLD}* Pruning {args.package_name} {args.channel} versions "
+          f"(keeping newest {args.keep}):{CMD_FORMAT.END}")
+    for published in stale:
+        print(f"    {published.label:<{LIST_LABEL_WIDTH}}{published.path.as_posix()}")
+    if args.dry_run:
+        return 0
+
+    for published in stale:
+        remove_published(published)
+    print(f"{CMD_FORMAT.GREEN}Removed {len(stale)} version(s).{CMD_FORMAT.END}")
+    return 0
+
+
+def cmd_use(args: argparse.Namespace) -> int:
+    """Points the Maya <name>.mod file at an already published <channel>-<version> folder."""
+    logger.debug("cmd_use() args: %s", args)
+    folder = _resolve_list_dir(args.dir)
+    published = find_published(folder, args.package_name, args.version)
+    mod_dir = _resolve_mod_dir()
+
+    mod_path = write_mod_file(mod_dir, args.package_name, str(published.version), published.path)
+    print(f"{CMD_FORMAT.GREEN}{args.package_name} now uses {published.label}: {published.path}{CMD_FORMAT.END}")
+    print(f"mod file: {mod_path}")
     return 0
 
 
@@ -272,20 +364,22 @@ def main() -> int:
     p.add_argument("-h", "--help", action=_HelpWithVersionAction, help="show this help message and exit")
     sub = p.add_subparsers(dest="cmd", required=True)
 
-    # Common parent parser for subcommands
-    # base_parser = argparse.ArgumentParser(add_help=False)
-    # base_parser.add_argument("--name", default=None, help="Package name (default: read from pyproject)")
-    # base_parser.add_argument("--root-dir", default=".", help="Package root (default: current directory)")
-    # base_parser.add_argument("--source-dir", help="Relative source directory path (default: read from pyproject)")
-
     p_version = sub.add_parser("version", help="Get/Set version of the package.")
     p_version.add_argument("root_dir", nargs="?", default='.', help="Package root (default: current directory)")
     p_version.add_argument("--bump", nargs="?", const="patch", choices=["major", "minor", "patch", "prerelease"])
     p_version.set_defaults(func=cmd_version)
 
+    p_release = sub.add_parser("release", help="Bump the version, date the changelog, commit and tag. Never pushes.")
+    p_release.add_argument("root_dir", nargs="?", default='.', help="Package root (default: current directory)")
+    p_release.add_argument("--bump", required=True, choices=RELEASE_BUMP_PARTS, help="Version part to bump")
+    p_release.add_argument("--dry-run", action="store_true", help="Print the release plan without changing anything")
+    p_release.set_defaults(func=cmd_release)
+
     p_build = sub.add_parser("build", help="Build wheel+sdist")
     p_build.add_argument("root_dir", nargs="?", default='.', help="Source folder to build (default: current directory)")
-    p_build.add_argument("--out-dir", default=DEFAULT_BUILD_DIR, help=f"Output dir (default: {DEFAULT_BUILD_DIR})")
+    p_build.add_argument("--out-dir", default=None,
+                         help="Output dir. Overrides the config.toml build_dir default "
+                              f"(falls back to {DEFAULT_BUILD_DIR}).")
     p_build.set_defaults(func=cmd_build)
 
     p_pub = sub.add_parser("publish", help="Publish package files into a target root")
@@ -295,9 +389,13 @@ def main() -> int:
                        help="Target root folder the package is published into. "
                             f"Overrides {PUBLISH_DIR_ENV} and the config.toml default. "
                             f"Falls back to {DEFAULT_PUBLISH_DIR} if none of those are set.")
-    p_pub.add_argument("--channel", choices=list(CHANNELS), default="rel")
+    p_pub.add_argument("--channel", choices=list(CHANNELS), default=REL_CHANNEL,
+                       help=f"Publish channel (default: {REL_CHANNEL}). {DEV_CHANNEL} publishes from a git "
+                            "checkout get the short commit hash appended as build metadata.")
     p_pub.add_argument("--read-only", action="store_true", help="Set read-only permissions on the published files")
-    # p_pub.add_argument("--write-mod", action="store_true", help="Write a .mod file into the first MAYA_MODULE_PATH dir")
+    p_pub.add_argument("--write-mod", action="store_true",
+                       help="Write a Maya <name>.mod pointing at the published folder into the config.toml "
+                            f"mod_dir, or the first existing dir on {MAYA_MODULE_PATH_ENV}")
     p_pub.add_argument("--dry-run", action="store_true", help="Print publish plan without copying files")
     p_pub.set_defaults(func=cmd_publish)
 
@@ -311,6 +409,27 @@ def main() -> int:
                              f"Overrides config.toml {LIST_LIMIT_KEY} (default: {DEFAULT_LIST_LIMIT}).")
     p_list.set_defaults(func=cmd_list)
 
+    p_prune = sub.add_parser("prune", help="Delete old published versions of a package, keeping the newest ones.")
+    p_prune.add_argument("package_name", help="Name of the published package.")
+    p_prune.add_argument("--channel", choices=list(CHANNELS), default=DEV_CHANNEL,
+                         help=f"Channel to prune (default: {DEV_CHANNEL})")
+    p_prune.add_argument("--keep", type=int, default=DEFAULT_PRUNE_KEEP,
+                         help=f"Newest versions to keep (default: {DEFAULT_PRUNE_KEEP}). "
+                              "The version the Maya .mod file points at is always kept.")
+    p_prune.add_argument("--dir", default=None,
+                         help="Folder holding the published packages (same folder passed to `publish --out-dir`). "
+                              f"Overrides {PUBLISH_DIR_ENV} and the config.toml default.")
+    p_prune.add_argument("--dry-run", action="store_true", help="Print what would be deleted without deleting")
+    p_prune.set_defaults(func=cmd_prune)
+
+    p_use = sub.add_parser("use", help="Point a package's Maya .mod file at a published version.")
+    p_use.add_argument("package_name", help="Name of the published package.")
+    p_use.add_argument("version", help="Published folder to use, as <channel>-<version>, e.g. rel-1.2.0")
+    p_use.add_argument("--dir", default=None,
+                       help="Folder holding the published packages (same folder passed to `publish --out-dir`). "
+                            f"Overrides {PUBLISH_DIR_ENV} and the config.toml default.")
+    p_use.set_defaults(func=cmd_use)
+
     p_config = sub.add_parser("config", help="Get/set/list dlpkg settings stored in config.toml.")
     config_sub = p_config.add_subparsers(dest="action", required=True)
     p_config_get = config_sub.add_parser("get", help="Print the value of a setting.")
@@ -320,11 +439,6 @@ def main() -> int:
     p_config_set.add_argument("value", help="Value to store")
     config_sub.add_parser("list", help="Print all configured settings.")
     p_config.set_defaults(func=cmd_config)
-
-    # -- write-mod file
-    # p_mod = sub.add_parser("writemod", parents=[base_parser], help="Write a .mod file into the first MAYA_MODULE_PATH dir")
-    # p_mod.add_argument("--version", default=None, help="Override version (default: read from pyproject)")
-    # p_mod.set_defaults(func=cmd_write_mod)
 
     args = p.parse_args()
     return int(args.func(args))

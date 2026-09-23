@@ -3,11 +3,13 @@
 ```
 src/dlpkg/
     cli.py          argparse tree plus every cmd_* subcommand; no dispatch layer
+    changelog.py    release_changelog(): dates the Unreleased section and repoints compare links
     package.py      PythonPackage facade: name, version, authors, source dirs
-    tomlutil.py     TomlFile base, PyProjectToml, ConfigToml (tomlkit)
+    published.py    CHANNELS, PublishedVersion, scan_published(), find_published(), remove_published(), write_metadata()
+    tomlutil.py     TomlFile base, PyProjectToml, ConfigToml, PublishToml (tomlkit)
     versioning.py   SemVer dataclass, read_init_version() and write_init_version() for __init__.py
-    util.py         run, ensure_empty_dir, make_read_only_recursively (icacls, Windows only)
-    modfile.py      untracked, in-progress Maya .mod writer (main checkout only)
+    util.py         run, git, git_short_hash, git_is_clean, ensure_empty_dir, make_read_only_recursively (icacls)
+    modfile.py      Maya .mod files: first_maya_module_dir(), write_mod_file(), read_mod_target()
 tests/              pytest suite, fixtures in conftest.py, see .claude/testing.md
 config.toml         persisted defaults, read by ConfigToml
 pyproject.toml      [tool.pytest.ini_options] puts src on the test path
@@ -18,24 +20,32 @@ pyproject.toml      [tool.pytest.ini_options] puts src on the test path
 - `cmd_publish` takes a package root or a `.whl` path (`_package_source`). From a wheel it parses
   name and version out of the filename with `_WHEEL_NAME_RE`. For a root dir the published name is
   the folder name (`PythonPackage.name`), not `[project].name`. The target
-  `<out_dir>/<name>/<channel>-<version>` must not exist yet.
+  `<out_dir>/<name>/<channel>-<version>` must not exist yet. A `DEV_CHANNEL` publish from a package
+  root gets the git short hash appended as build metadata (`with_build_tag`); wheels are never retagged.
 - Output folder precedence lives in one helper, `_configured_publish_dir`: CLI flag, then
   `PUBLISH_DIR_ENV`, then `ConfigToml.publish_dir`. `cmd_publish` falls back to
   `DEFAULT_PUBLISH_DIR`; `cmd_list` raises instead.
-- `CHANNELS` maps channel name to the heading `cmd_list` prints and drives the `--channel` choices.
-  `_scan_published_versions` returns `{channel: [(SemVer, datetime), ...]}` newest-first, cut to
-  `--limit`, config `list_limit`, or `DEFAULT_LIST_LIMIT`. The datetime is the folder's creation
-  time; no metadata file is written.
+- `published.CHANNELS` maps channel name to the heading `cmd_list` prints and drives the `--channel`
+  choices. `scan_published` returns `{channel: [PublishedVersion, ...]}` newest-first, cut to
+  `--limit`, config `list_limit`, or `DEFAULT_LIST_LIMIT`. Every published folder carries a
+  `METADATA_FILE` (`dlpkg.toml`, a `PublishToml`) with the publish time and git commit; folders
+  without one fall back to the filesystem creation time.
 - `cmd_config get|set|list` is the only supported way to persist settings in `config.toml`.
-- `cmd_build --out-dir` defaults to `DEFAULT_BUILD_DIR`, not wired to `ConfigToml.build_dir`.
+- `cmd_release` follows `D:\Dev\.claude\git-workflow.md`: clean tree required, `PythonPackage.version`
+  bump, `release_changelog`, `git add --update`, commit `RELEASE_COMMIT_FORMAT`, annotated tag. No push.
+- `_resolve_build_dir`: `--out-dir` flag, then config `build_dir`, then `DEFAULT_BUILD_DIR`. Config path
+  keys resolve relative to `config.toml`, so a relative `build_dir` there points into the dlpkg repo.
 - `PythonPackage` reads the version from `pyproject.toml` first, then `__version__` in `__init__.py`.
   Setting it always writes `pyproject.toml`; the `__init__.py` write is best effort and skipped
   when no `__init__.py` defines `__version__`. Without `pyproject.toml` every accessor raises.
 - `PyProjectToml.source_roots` finds the source dir the way setuptools does: `packages.find.where`,
   else `package-dir` `""`, else the pyproject directory. Only existing dirs are returned.
 - `SemVer` equality and hash both ignore build metadata.
-- `modfile.py` is not wired up. `cli.py` keeps a commented-out `base_parser`, `--write-mod` flag and
-  `writemod` subcommand stub showing the intended shape. Leave them in place.
+- `publish --write-mod` writes `<name>.mod` with `+ <name> <version> <folder>` and `PYTHONPATH +:= .`
+  (pip `--target` puts the package right inside the version folder). The mod folder comes from
+  `_resolve_mod_dir`: config `mod_dir`, else the first existing dir on `MAYA_MODULE_PATH`.
+  `cmd_use` rewrites the same file to an existing published folder found by `find_published`.
+  `cmd_list` and `cmd_prune` read it back through `_active_mod_target`; prune never deletes that folder.
 
 ## Conventions
 

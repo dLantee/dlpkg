@@ -4,6 +4,32 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- `dlpkg publish` writes a `dlpkg.toml` metadata file into every published version folder with
+  the package name, channel, version, publish time and git commit.
+- `dlpkg publish --write-mod` writes a Maya `<name>.mod` pointing at the published folder into
+  the new `mod_dir` config setting, or the first existing folder on `MAYA_MODULE_PATH`.
+- `dlpkg use <name> <channel>-<version>` points the Maya `.mod` file at an already published
+  version, to switch between dev and rel builds or roll back without republishing.
+- `dlpkg list` marks the version the Maya `.mod` file currently points at with `(active)`.
+- `dlpkg publish --channel dev` from a git checkout appends the short commit hash as SemVer build
+  metadata (`dev-1.2.5+abc1234`), so dev publishes from different commits never collide.
+- `dlpkg prune <name> [--channel dev] [--keep 3] [--dry-run]` deletes old published versions of
+  one channel, keeping the newest ones and never the version the Maya `.mod` file points at.
+- `dlpkg release --bump <major|minor|patch> [--dry-run]` bumps the version, moves the changelog's
+  Unreleased entries under a dated heading with a compare link, commits `Release vX.Y.Z` and tags
+  it. It refuses a dirty working tree or an empty Unreleased section, and never pushes.
+
+### Changed
+- `dlpkg list` reads each version's timestamp from `dlpkg.toml`, falling back to the folder's
+  creation time for versions published before this change.
+- `dlpkg build` honours the `build_dir` config setting when `--out-dir` is not passed
+  (`--out-dir` > `build_dir` > `./build`). The shipped `config.toml` no longer sets `build_dir`,
+  since a relative value there resolves against the dlpkg repo, not the package being built.
+- README describes the current flags and commands; the stale `--version` and `--write-mod`
+  descriptions and the claim that `publish` builds first are gone.
+- Internal: the published-store scanning moved from `cli.py` into a new `published.py` module.
+
 ## [0.6.0] - 2026-09-22
 
 ### Changed

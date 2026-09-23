@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 from typing import Any, ClassVar, Self
 
@@ -31,6 +32,11 @@ class TomlFile:
 
     def __setitem__(self, key: str, value: Any) -> None:
         self._doc[key] = value
+
+    @property
+    def path(self) -> Path | None:
+        """Where the document was loaded from, or will be saved to."""
+        return self._doc_path
 
     @classmethod
     def open(cls, file_path: Path | str) -> Self:
@@ -94,7 +100,7 @@ class ConfigToml(TomlFile):
 
     # Keys under [defaults] that hold a filesystem path: resolved relative to the config file on
     # read, normalised to an absolute path string on write.
-    _PATH_KEYS: ClassVar[frozenset[str]] = frozenset({"build_dir", "publish_dir"})
+    _PATH_KEYS: ClassVar[frozenset[str]] = frozenset({"build_dir", "publish_dir", "mod_dir"})
 
     @classmethod
     def open_default(cls) -> Self:
@@ -147,6 +153,10 @@ class ConfigToml(TomlFile):
     @publish_dir.setter
     def publish_dir(self, value: Path | str) -> None:
         self.set_value("publish_dir", value)
+
+    @property
+    def mod_dir(self) -> Path | None:
+        return self.get_value("mod_dir")
 
 
 @dataclass()
@@ -217,3 +227,37 @@ class PyProjectToml(TomlFile):
         if not roots:
             raise RuntimeError(f"No source roots found for {self._doc_path}")
         return roots
+
+
+@dataclass()
+class PublishToml(TomlFile):
+    """Metadata file written into every published version folder, under a [publish] table."""
+
+    PUBLISH_TABLE: ClassVar[str] = "publish"
+
+    def _get(self, key: str) -> Any:
+        try:
+            return self._doc[self.PUBLISH_TABLE][key]
+        except _MISSING:
+            return None
+
+    def set_publish_info(self, name: str, channel: str, version: str, published_at: datetime,
+                         commit: str | None) -> None:
+        table = tomlkit.table()
+        table["name"] = name
+        table["channel"] = channel
+        table["version"] = version
+        table["published_at"] = published_at
+        if commit:
+            table["commit"] = commit
+        self._doc[self.PUBLISH_TABLE] = table
+
+    @property
+    def published_at(self) -> datetime | None:
+        value = self._get("published_at")
+        return value if isinstance(value, datetime) else None
+
+    @property
+    def commit(self) -> str | None:
+        value = self._get("commit")
+        return str(value) if value is not None else None

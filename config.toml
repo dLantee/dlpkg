@@ -1,3 +1,2 @@
 [defaults]
 publish_dir = "D:/Extensions/maya/modules"
-build_dir = "./build"
