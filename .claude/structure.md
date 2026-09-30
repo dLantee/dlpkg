@@ -40,7 +40,7 @@ pyproject.toml      [tool.pytest.ini_options] puts src on the test path
   keeps `build_dir` as written (not in `ConfigToml._PATH_KEYS`). Backend output shows only on failure.
 - `PythonPackage` reads the version from `pyproject.toml` first, then `__version__` in `__init__.py`.
   Setting it always writes `pyproject.toml`; the `__init__.py` write is best effort and skipped
-  when no `__init__.py` defines `__version__`. Without `pyproject.toml` every accessor raises.
+  when no `__init__.py` defines `__version__`.
 - `PyProjectToml.source_roots` finds the source dir the way setuptools does: `packages.find.where`,
   else `package-dir` `""`, else the pyproject directory. Only existing dirs are returned.
 - `SemVer` equality and hash both ignore build metadata.
@@ -54,7 +54,10 @@ pyproject.toml      [tool.pytest.ini_options] puts src on the test path
 
 - `cmd_*` functions take an `argparse.Namespace` and return an `int` exit code. Tests call them
   directly with a hand-built `Namespace`.
-- Positional `root_dir` / `source_path` defaults to `.`, so commands run from inside the target package.
+- Positional `root_dir` / `source_path` defaults to `.`. `find_package_root` walks up from it to the nearest
+  `pyproject.toml`, so commands run from any folder inside the package. `PythonPackage` and `cmd_build` use it.
 - `CMD_FORMAT` in `cli.py` holds raw ANSI codes; no colour library.
+- `main()` catches any error from a `cmd_*`, prints `error: <message>` in red to stderr and returns 1.
+  Raise with a message a user can act on; the traceback is only logged at debug level.
 - Defaults, env var names and config keys are module constants, never inline literals.
 - Missing TOML keys are caught with `(KeyError, TypeError)`; tomlkit's `NonExistentKey` is a `KeyError`.

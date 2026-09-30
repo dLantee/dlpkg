@@ -16,6 +16,12 @@ def test_cmd_version_query(capsys, temp_toml_package):
     assert capsys.readouterr().out.strip() == "1.2.5"
 
 
+def test_cmd_version_from_subfolder(capsys, temp_toml_package):
+    rc = cli.cmd_version(argparse.Namespace(root_dir=str(temp_toml_package / "src"), bump=None))
+    assert rc == 0
+    assert capsys.readouterr().out.strip() == "1.2.5"
+
+
 def test_cmd_version_bump(capsys, temp_toml_package):
 
     def _read_doc():
@@ -162,11 +168,11 @@ def test_cmd_build_writes_wheel_to_dist(monkeypatch, tmp_path, temp_toml_package
     assert str(wheels[0]) in capsys.readouterr().out
 
 
-def test_cmd_build_missing_pyproject_returns_1(tmp_path, monkeypatch, capsys):
+def test_cmd_build_outside_package_fails_before_running(tmp_path, monkeypatch):
     ran = []
     monkeypatch.setattr("dlpkg.builder.run", lambda *a, **k: ran.append(a))
-    assert cli.cmd_build(_build_args(tmp_path, out_dir="dist")) == 1
-    assert "pyproject.toml" in capsys.readouterr().out
+    with pytest.raises(FileNotFoundError, match="pyproject.toml"):
+        cli.cmd_build(_build_args(tmp_path, out_dir="dist"))
     assert ran == []
 
 
@@ -270,6 +276,20 @@ def test_publish_dry_run_prints_target(tmp_path, capsys, temp_toml_package: Path
     assert rc == 0
     assert (out_dir / "test_package" / "rel-1.2.5").as_posix() in capsys.readouterr().out
     assert not out_dir.exists()
+
+
+def test_publish_dry_run_from_subfolder_uses_package_root(tmp_path, capsys, temp_toml_package: Path):
+    out_dir = tmp_path / "out"
+    rc = cli.cmd_publish(_publish_args(temp_toml_package / "src" / "my_package", out_dir, dry_run=True))
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert (out_dir / "test_package" / "rel-1.2.5").as_posix() in out
+    assert f"source: {temp_toml_package.as_posix()}" in out.splitlines()
+
+
+def test_publish_outside_package_raises(tmp_path):
+    with pytest.raises(FileNotFoundError, match="pyproject.toml"):
+        cli.cmd_publish(_publish_args(tmp_path, tmp_path / "out", dry_run=True))
 
 
 def test_publish_refuses_existing_target(tmp_path, temp_toml_package: Path):
@@ -572,3 +592,12 @@ def test_cmd_list_uses_configured_list_limit_when_no_flag(monkeypatch, capsys, t
     assert "latest 2" in out
     rel_lines = [l for l in out.splitlines() if l.startswith("    rel-")]
     assert len(rel_lines) == 2
+
+
+def test_main_prints_error_message_without_traceback(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("sys.argv", ["dlpkg", "version"])
+    assert cli.main() == 1
+    captured = capsys.readouterr()
+    assert "No pyproject.toml found" in captured.err
+    assert "Traceback" not in captured.err + captured.out

@@ -7,6 +7,7 @@ import argparse
 import logging
 import os
 import re
+import sys
 from datetime import date
 from pathlib import Path
 
@@ -15,7 +16,7 @@ from dlpkg.builder import WORK_DIR, BuildError, build_package
 from dlpkg.changelog import CHANGELOG_FILE, release_changelog
 from dlpkg.modfile import (MAYA_MODULE_PATH_ENV, first_maya_module_dir, mod_file_path, read_mod_target,
                            write_mod_file)
-from dlpkg.package import PythonPackage
+from dlpkg.package import PythonPackage, find_package_root
 from dlpkg.published import (CHANNELS, DEV_CHANNEL, METADATA_FILE, REL_CHANNEL, PublishedVersion, find_published,
                              remove_published, scan_published, with_build_tag, write_metadata)
 from dlpkg.tomlutil import ConfigToml
@@ -28,6 +29,7 @@ PUBLISH_DIR_ENV = "DLPKG_PUBLISH_DIR"
 DEFAULT_PUBLISH_DIR = "./publish"
 BUILD_DIR_ENV = "DLPKG_BUILD_DIR"
 DEFAULT_DIST_DIR = "dist"
+ROOT_DIR_HELP = "Package root or any folder inside it (default: current directory)"
 DEFAULT_LIST_LIMIT = 10
 LIST_LIMIT_KEY = "list_limit"
 DEFAULT_PRUNE_KEEP = 3
@@ -124,7 +126,7 @@ def _resolve_build_dir(root: Path, out_dir_arg: str | None) -> Path:
 
 
 def cmd_build(args: argparse.Namespace) -> int:
-    root = Path(args.root_dir).resolve()
+    root = find_package_root(args.root_dir)
     try:
         artifacts = build_package(root, _resolve_build_dir(root, args.out_dir), sdist=args.sdist,
                                   isolation=not args.no_isolation, verbose=args.verbose)
@@ -191,9 +193,6 @@ def _package_source(source_path: str) -> tuple[str, str, Path]:
     path = Path(source_path).resolve()
     if path.is_dir():
         pkg_info = PythonPackage(path)
-        if not pkg_info.has_config:
-            raise RuntimeError(f"Cannot find package config in {path}. "
-                               "Please make sure pyproject.toml exists and is properly configured.")
         return pkg_info.name, pkg_info.version, pkg_info.root_dir
     if path.suffix == ".whl":
         m = _WHEEL_NAME_RE.match(path.stem)
@@ -367,18 +366,18 @@ def main() -> int:
     sub = p.add_subparsers(dest="cmd", required=True)
 
     p_version = sub.add_parser("version", help="Get/Set version of the package.")
-    p_version.add_argument("root_dir", nargs="?", default='.', help="Package root (default: current directory)")
+    p_version.add_argument("root_dir", nargs="?", default='.', help=ROOT_DIR_HELP)
     p_version.add_argument("--bump", nargs="?", const="patch", choices=["major", "minor", "patch", "prerelease"])
     p_version.set_defaults(func=cmd_version)
 
     p_release = sub.add_parser("release", help="Bump the version, date the changelog, commit and tag. Never pushes.")
-    p_release.add_argument("root_dir", nargs="?", default='.', help="Package root (default: current directory)")
+    p_release.add_argument("root_dir", nargs="?", default='.', help=ROOT_DIR_HELP)
     p_release.add_argument("--bump", required=True, choices=RELEASE_BUMP_PARTS, help="Version part to bump")
     p_release.add_argument("--dry-run", action="store_true", help="Print the release plan without changing anything")
     p_release.set_defaults(func=cmd_release)
 
     p_build = sub.add_parser("build", help=f"Build a wheel in <root>/{WORK_DIR}, written to <root>/{DEFAULT_DIST_DIR}")
-    p_build.add_argument("root_dir", nargs="?", default='.', help="Package root (default: current directory)")
+    p_build.add_argument("root_dir", nargs="?", default='.', help=ROOT_DIR_HELP)
     p_build.add_argument("--out-dir", default=None,
                          help=f"Artifact folder, relative to the package root. Overrides {BUILD_DIR_ENV} and the "
                               f"config.toml build_dir (falls back to {DEFAULT_DIST_DIR}).")
@@ -390,7 +389,7 @@ def main() -> int:
 
     p_pub = sub.add_parser("publish", help="Publish package files into a target root")
     p_pub.add_argument("source_path", nargs="?", default='.',
-                       help="Package root directory or .whl file (default: current directory)")
+                       help=f"{ROOT_DIR_HELP}, or a .whl file")
     p_pub.add_argument("--out-dir", default=None,
                        help="Target root folder the package is published into. "
                             f"Overrides {PUBLISH_DIR_ENV} and the config.toml default. "
@@ -447,7 +446,12 @@ def main() -> int:
     p_config.set_defaults(func=cmd_config)
 
     args = p.parse_args()
-    return int(args.func(args))
+    try:
+        return int(args.func(args))
+    except Exception as e:
+        logger.debug("dlpkg %s failed", args.cmd, exc_info=True)
+        print(f"{CMD_FORMAT.RED}error: {e}{CMD_FORMAT.END}", file=sys.stderr)
+        return 1
 
 
 if __name__ == "__main__":

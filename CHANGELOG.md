@@ -8,6 +8,8 @@ All notable changes to this project will be documented in this file.
 - `dlpkg build --sdist` also builds a source distribution, `--no-isolation` builds in the current
   environment, and `--verbose` streams the backend output, which is otherwise shown only on failure.
 - The `DLPKG_BUILD_DIR` environment variable sets the build output folder.
+- `dlpkg version`, `release`, `build` and `publish` find the package root by walking up to the
+  nearest `pyproject.toml`, so they work from any folder inside the package.
 
 ### Changed
 - `dlpkg build` builds in `<root>/build`, emptied first so deleted files never leak into the wheel,
@@ -15,6 +17,10 @@ All notable changes to this project will be documented in this file.
   `build_dir` > `dist`). A relative folder resolves against the package root. Other files in the
   output folder are kept.
 - `build` is now a dlpkg dependency; `dlpkg build` no longer upgrades pip and build on every run.
+- `dlpkg build` and `publish` fail early with a clear message outside a package, instead of
+  running the build or `pip` in the wrong folder.
+- Errors print as one red `error: <message>` line on stderr with exit code 1, instead of a
+  Python traceback.
 
 ## [0.7.0] - 2026-09-22
 
