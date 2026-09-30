@@ -100,7 +100,7 @@ class ConfigToml(TomlFile):
 
     # Keys under [defaults] that hold a filesystem path: resolved relative to the config file on
     # read, normalised to an absolute path string on write.
-    _PATH_KEYS: ClassVar[frozenset[str]] = frozenset({"build_dir", "publish_dir", "mod_dir"})
+    _PATH_KEYS: ClassVar[frozenset[str]] = frozenset({"publish_dir", "mod_dir"})
 
     @classmethod
     def open_default(cls) -> Self:
@@ -143,7 +143,8 @@ class ConfigToml(TomlFile):
         return {key: self.get_value(key) for key in defaults}
 
     @property
-    def build_dir(self) -> Path | None:
+    def build_dir(self) -> str | None:
+        """Kept as written: a relative value is anchored to the package being built, not to this file."""
         return self.get_value("build_dir")
 
     @property

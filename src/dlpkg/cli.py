@@ -11,6 +11,7 @@ from datetime import date
 from pathlib import Path
 
 from dlpkg import __version__
+from dlpkg.builder import WORK_DIR, BuildError, build_package
 from dlpkg.changelog import CHANGELOG_FILE, release_changelog
 from dlpkg.modfile import (MAYA_MODULE_PATH_ENV, first_maya_module_dir, mod_file_path, read_mod_target,
                            write_mod_file)
@@ -18,14 +19,15 @@ from dlpkg.package import PythonPackage
 from dlpkg.published import (CHANNELS, DEV_CHANNEL, METADATA_FILE, REL_CHANNEL, PublishedVersion, find_published,
                              remove_published, scan_published, with_build_tag, write_metadata)
 from dlpkg.tomlutil import ConfigToml
-from dlpkg.util import ensure_empty_dir, git, git_is_clean, git_short_hash, make_read_only_recursively, run
+from dlpkg.util import git, git_is_clean, git_short_hash, make_read_only_recursively, run
 from dlpkg.versioning import SemVer
 
 logger = logging.getLogger(__name__)
 
 PUBLISH_DIR_ENV = "DLPKG_PUBLISH_DIR"
 DEFAULT_PUBLISH_DIR = "./publish"
-DEFAULT_BUILD_DIR = "./build"
+BUILD_DIR_ENV = "DLPKG_BUILD_DIR"
+DEFAULT_DIST_DIR = "dist"
 DEFAULT_LIST_LIMIT = 10
 LIST_LIMIT_KEY = "list_limit"
 DEFAULT_PRUNE_KEEP = 3
@@ -114,23 +116,23 @@ def cmd_release(args: argparse.Namespace) -> int:
     return 0
 
 
-def _resolve_build_dir(out_dir_arg: str | None) -> Path:
-    """Output folder for `dlpkg build`: --out-dir flag > config.toml [defaults].build_dir > DEFAULT_BUILD_DIR."""
-    if out_dir_arg:
-        return Path(out_dir_arg).resolve()
-    return ConfigToml.open_default().build_dir or Path(DEFAULT_BUILD_DIR).resolve()
+def _resolve_build_dir(root: Path, out_dir_arg: str | None) -> Path:
+    """Artifact folder for `dlpkg build`: --out-dir flag > BUILD_DIR_ENV > config.toml build_dir >
+    DEFAULT_DIST_DIR. A relative value resolves against the package root."""
+    configured = out_dir_arg or os.environ.get(BUILD_DIR_ENV) or ConfigToml.open_default().build_dir
+    return (root / (configured or DEFAULT_DIST_DIR)).resolve()
 
 
 def cmd_build(args: argparse.Namespace) -> int:
-    src_dir = Path(args.root_dir).resolve()
-    out_dir = _resolve_build_dir(args.out_dir)
-    ensure_empty_dir(out_dir)
-
-    run(["python", "-m", "pip", "install", "--upgrade", "pip"])
-    run(["python", "-m", "pip", "install", "--upgrade", "build"])
-    run(["python", "-m", "build", "--outdir", str(out_dir)], cwd=src_dir)
-
-    print(f"Built dist into: {out_dir}")
+    root = Path(args.root_dir).resolve()
+    try:
+        artifacts = build_package(root, _resolve_build_dir(root, args.out_dir), sdist=args.sdist,
+                                  isolation=not args.no_isolation, verbose=args.verbose)
+    except BuildError as exc:
+        print(f"{CMD_FORMAT.RED}{exc}{CMD_FORMAT.END}")
+        return 1
+    for artifact in artifacts:
+        print(f"{CMD_FORMAT.GREEN}Built {artifact}{CMD_FORMAT.END}")
     return 0
 
 
@@ -375,11 +377,15 @@ def main() -> int:
     p_release.add_argument("--dry-run", action="store_true", help="Print the release plan without changing anything")
     p_release.set_defaults(func=cmd_release)
 
-    p_build = sub.add_parser("build", help="Build wheel+sdist")
-    p_build.add_argument("root_dir", nargs="?", default='.', help="Source folder to build (default: current directory)")
+    p_build = sub.add_parser("build", help=f"Build a wheel in <root>/{WORK_DIR}, written to <root>/{DEFAULT_DIST_DIR}")
+    p_build.add_argument("root_dir", nargs="?", default='.', help="Package root (default: current directory)")
     p_build.add_argument("--out-dir", default=None,
-                         help="Output dir. Overrides the config.toml build_dir default "
-                              f"(falls back to {DEFAULT_BUILD_DIR}).")
+                         help=f"Artifact folder, relative to the package root. Overrides {BUILD_DIR_ENV} and the "
+                              f"config.toml build_dir (falls back to {DEFAULT_DIST_DIR}).")
+    p_build.add_argument("--sdist", action="store_true", help="Also build a source distribution")
+    p_build.add_argument("--no-isolation", action="store_true",
+                         help="Build in the current environment instead of a fresh isolated one")
+    p_build.add_argument("--verbose", action="store_true", help="Stream the backend output")
     p_build.set_defaults(func=cmd_build)
 
     p_pub = sub.add_parser("publish", help="Publish package files into a target root")

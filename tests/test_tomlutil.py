@@ -33,7 +33,7 @@ def test_config_reads_renamed_keys(tmp_path):
     path.write_text('[defaults]\npublish_dir = "D:/Extensions/maya/modules"\nbuild_dir = "./build"\n', encoding="utf-8")
     cfg = ConfigToml.open(path)
     assert cfg.publish_dir == Path("D:/Extensions/maya/modules").resolve()
-    assert cfg.build_dir == (tmp_path / "build").resolve()
+    assert cfg.build_dir == "./build"
 
 
 def test_config_publish_dir_roundtrip(tmp_path):
@@ -68,12 +68,12 @@ def test_all_values_returns_resolved_settings(tmp_path):
     path = tmp_path / "config.toml"
     cfg = ConfigToml.open_or_create(path)
     cfg.publish_dir = tmp_path / "publishes"
-    cfg.set_value("build_dir", tmp_path / "build")
+    cfg.set_value("build_dir", "out")
     cfg.set_value("list_limit", "5")
     cfg.save()
 
     reopened = ConfigToml.open(path)
     values = reopened.all_values()
     assert values["publish_dir"] == (tmp_path / "publishes").resolve()
-    assert values["build_dir"] == (tmp_path / "build").resolve()
+    assert values["build_dir"] == "out"
     assert values["list_limit"] == 5

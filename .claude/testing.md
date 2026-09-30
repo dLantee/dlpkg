@@ -19,5 +19,6 @@ inside a worktree would silently exercise the main checkout's code instead of th
 Shared fixtures (`temp_toml_package`, `published_versions_dir`) live in `tests/conftest.py` and
 are auto-loaded; do not import them.
 
-`test_cmd_build` is slow: it upgrades pip and build and runs a real build. Skip it while iterating
-with `--deselect tests/test_cli.py::test_cmd_build`, and run the full suite once before committing.
+The build tests (`tests/test_builder.py`, `test_cmd_build_*`) run real isolated builds, a few seconds each.
+Skip them while iterating with `-k "not build_package and not cmd_build"`, and run the full suite once
+before committing. They need `build` installed in the test environment.

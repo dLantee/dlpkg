@@ -3,6 +3,7 @@
 ```
 src/dlpkg/
     cli.py          argparse tree plus every cmd_* subcommand; no dispatch layer
+    builder.py      build_package(): empties <root>/build, runs python -m build, returns new artifacts
     changelog.py    release_changelog(): dates the Unreleased section and repoints compare links
     package.py      PythonPackage facade: name, version, authors, source dirs
     published.py    CHANNELS, PublishedVersion, scan_published(), find_published(), remove_published(), write_metadata()
@@ -33,8 +34,10 @@ pyproject.toml      [tool.pytest.ini_options] puts src on the test path
 - `cmd_config get|set|list` is the only supported way to persist settings in `config.toml`.
 - `cmd_release` follows `D:\Dev\.claude\git-workflow.md`: clean tree required, `PythonPackage.version`
   bump, `release_changelog`, `git add --update`, commit `RELEASE_COMMIT_FORMAT`, annotated tag. No push.
-- `_resolve_build_dir`: `--out-dir` flag, then config `build_dir`, then `DEFAULT_BUILD_DIR`. Config path
-  keys resolve relative to `config.toml`, so a relative `build_dir` there points into the dlpkg repo.
+- `dlpkg build` builds in `<root>/build` (`WORK_DIR`, emptied first so setuptools never reuses a stale
+  `build/lib`) and writes artifacts to `_resolve_build_dir`: `--out-dir`, then `BUILD_DIR_ENV`, then config
+  `build_dir`, then `DEFAULT_DIST_DIR`. Any relative value resolves against the package root, so config
+  keeps `build_dir` as written (not in `ConfigToml._PATH_KEYS`). Backend output shows only on failure.
 - `PythonPackage` reads the version from `pyproject.toml` first, then `__version__` in `__init__.py`.
   Setting it always writes `pyproject.toml`; the `__init__.py` write is best effort and skipped
   when no `__init__.py` defines `__version__`. Without `pyproject.toml` every accessor raises.

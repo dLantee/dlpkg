@@ -114,29 +114,69 @@ def test_cmd_release_refuses_empty_unreleased(git_package: Path):
     assert cli.git(["tag"], git_package) == ""
 
 
-def test_resolve_build_dir_flag_overrides_config(monkeypatch, tmp_path):
+@pytest.fixture
+def build_config(monkeypatch, tmp_path):
+    """Points dlpkg at an isolated config.toml with build_dir = "cfg_out" and clears BUILD_DIR_ENV."""
     monkeypatch.setattr(cli.ConfigToml, "DEFAULT_PATH", tmp_path / "cfg" / "config.toml")
-    cli.cmd_config(argparse.Namespace(action="set", key="build_dir", value=str(tmp_path / "cfg_build")))
-    assert cli._resolve_build_dir(str(tmp_path / "flag_build")) == (tmp_path / "flag_build").resolve()
+    monkeypatch.delenv(cli.BUILD_DIR_ENV, raising=False)
+    cli.cmd_config(argparse.Namespace(action="set", key="build_dir", value="cfg_out"))
+    return monkeypatch
 
 
-def test_resolve_build_dir_uses_config_build_dir(monkeypatch, tmp_path):
-    monkeypatch.setattr(cli.ConfigToml, "DEFAULT_PATH", tmp_path / "cfg" / "config.toml")
-    cli.cmd_config(argparse.Namespace(action="set", key="build_dir", value=str(tmp_path / "cfg_build")))
-    assert cli._resolve_build_dir(None) == (tmp_path / "cfg_build").resolve()
+def test_resolve_build_dir_flag_beats_env_and_config(build_config, tmp_path):
+    build_config.setenv(cli.BUILD_DIR_ENV, "env_out")
+    assert cli._resolve_build_dir(tmp_path, "flag_out") == tmp_path / "flag_out"
 
 
-def test_resolve_build_dir_falls_back_to_local_build_folder(monkeypatch, tmp_path):
+def test_resolve_build_dir_env_beats_config(build_config, tmp_path):
+    build_config.setenv(cli.BUILD_DIR_ENV, "env_out")
+    assert cli._resolve_build_dir(tmp_path, None) == tmp_path / "env_out"
+
+
+def test_resolve_build_dir_config_is_relative_to_package_root(build_config, tmp_path):
+    assert cli._resolve_build_dir(tmp_path / "pkg", None) == tmp_path / "pkg" / "cfg_out"
+
+
+def test_resolve_build_dir_absolute_path_is_kept(build_config, tmp_path):
+    assert cli._resolve_build_dir(tmp_path / "pkg", str(tmp_path / "shared")) == tmp_path / "shared"
+
+
+def test_resolve_build_dir_defaults_to_dist(monkeypatch, tmp_path):
     monkeypatch.setattr(cli.ConfigToml, "DEFAULT_PATH", tmp_path / "no_such_config.toml")
-    assert cli._resolve_build_dir(None) == Path(cli.DEFAULT_BUILD_DIR).resolve()
+    monkeypatch.delenv(cli.BUILD_DIR_ENV, raising=False)
+    assert cli._resolve_build_dir(tmp_path, None) == tmp_path / cli.DEFAULT_DIST_DIR
 
 
-def test_cmd_build(tmp_path: Path, temp_toml_package: Path):
-    dist_path = tmp_path / "dist"
-    args = argparse.Namespace(root_dir=str(temp_toml_package), out_dir=str(dist_path))
-    rc = cli.cmd_build(args)
-    assert rc == 0
-    assert any(dist_path.glob("*.whl"))  # check that wheel file is created
+def _build_args(root: Path, **overrides) -> argparse.Namespace:
+    return argparse.Namespace(**{"root_dir": str(root), "out_dir": None, "sdist": False, "no_isolation": False,
+                                 "verbose": False, **overrides})
+
+
+def test_cmd_build_writes_wheel_to_dist(monkeypatch, tmp_path, temp_toml_package: Path, capsys):
+    monkeypatch.setattr(cli.ConfigToml, "DEFAULT_PATH", tmp_path / "no_such_config.toml")
+    monkeypatch.delenv(cli.BUILD_DIR_ENV, raising=False)
+    assert cli.cmd_build(_build_args(temp_toml_package)) == 0
+    wheels = list((temp_toml_package / "dist").iterdir())
+    assert [w.suffix for w in wheels] == [".whl"]
+    assert (temp_toml_package / cli.WORK_DIR).is_dir()
+    assert str(wheels[0]) in capsys.readouterr().out
+
+
+def test_cmd_build_missing_pyproject_returns_1(tmp_path, monkeypatch, capsys):
+    ran = []
+    monkeypatch.setattr("dlpkg.builder.run", lambda *a, **k: ran.append(a))
+    assert cli.cmd_build(_build_args(tmp_path, out_dir="dist")) == 1
+    assert "pyproject.toml" in capsys.readouterr().out
+    assert ran == []
+
+
+def test_cmd_build_backend_failure_returns_1_with_output(temp_toml_package: Path, capsys):
+    (temp_toml_package / "pyproject.toml").write_text('[project]\nname = "x"\nversion = "not a version"\n',
+                                                     encoding="utf-8")
+    assert cli.cmd_build(_build_args(temp_toml_package, out_dir="dist")) == 1
+    out = capsys.readouterr().out
+    assert "Build failed" in out
+    assert "version" in out.lower()
 
 
 def _publish_args(source_path: Path, out_dir: Path, dry_run: bool, write_mod: bool = False) -> argparse.Namespace:

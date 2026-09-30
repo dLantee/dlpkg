@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- `dlpkg build --sdist` also builds a source distribution, `--no-isolation` builds in the current
+  environment, and `--verbose` streams the backend output, which is otherwise shown only on failure.
+- The `DLPKG_BUILD_DIR` environment variable sets the build output folder.
+
+### Changed
+- `dlpkg build` builds in `<root>/build`, emptied first so deleted files never leak into the wheel,
+  and writes only a wheel into `<root>/dist` by default (`--out-dir` > `DLPKG_BUILD_DIR` >
+  `build_dir` > `dist`). A relative folder resolves against the package root. Other files in the
+  output folder are kept.
+- `build` is now a dlpkg dependency; `dlpkg build` no longer upgrades pip and build on every run.
+
 ## [0.7.0] - 2026-09-22
 
 ### Added

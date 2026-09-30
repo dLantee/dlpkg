@@ -8,10 +8,19 @@ from pathlib import Path
 _READ_ONLY_ACL_ARGS = ["/inheritance:r", "/grant:r", "Users:(RX)", "Administrators:(F)", "/T", "/C"]
 
 
-def run(cmd: list[str], cwd: Path | None = None) -> None:
-    """Runs a command in a subprocess, printing the command first."""
+def run(cmd: list[str], cwd: Path | None = None, quiet: bool = False) -> None:
+    """Runs a command in a subprocess, printing the command first. `quiet` captures stdout and
+    stderr together; they reach the caller as the CalledProcessError's `output` on failure.
+
+    Raises:
+        subprocess.CalledProcessError: when the command exits non-zero.
+    """
     print(">", " ".join(cmd))
-    subprocess.run(cmd, cwd=str(cwd) if cwd else None, check=True)
+    if quiet:
+        subprocess.run(cmd, cwd=str(cwd) if cwd else None, check=True, text=True,
+                       stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    else:
+        subprocess.run(cmd, cwd=str(cwd) if cwd else None, check=True)
 
 
 def git(args: list[str], cwd: Path) -> str:
