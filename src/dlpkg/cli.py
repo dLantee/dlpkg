@@ -7,12 +7,13 @@ import argparse
 import logging
 import os
 import re
+import shutil
 import sys
 from datetime import date
 from pathlib import Path
 
 from dlpkg import __version__
-from dlpkg.builder import WORK_DIR, BuildError, build_package
+from dlpkg.builder import WORK_DIR, BuildError, build_leftovers, build_package
 from dlpkg.changelog import CHANGELOG_FILE, release_changelog
 from dlpkg.modfile import (MAYA_MODULE_PATH_ENV, first_maya_module_dir, mod_file_path, read_mod_target,
                            write_mod_file)
@@ -30,6 +31,8 @@ DEFAULT_PUBLISH_DIR = "./publish"
 BUILD_DIR_ENV = "DLPKG_BUILD_DIR"
 DEFAULT_DIST_DIR = "dist"
 ROOT_DIR_HELP = "Package root or any folder inside it (default: current directory)"
+OUT_DIR_HELP = (f"Artifact folder, relative to the package root. Overrides {BUILD_DIR_ENV} and the "
+                f"config.toml build_dir (falls back to {DEFAULT_DIST_DIR}).")
 DEFAULT_LIST_LIMIT = 10
 LIST_LIMIT_KEY = "list_limit"
 DEFAULT_PRUNE_KEEP = 3
@@ -135,6 +138,35 @@ def cmd_build(args: argparse.Namespace) -> int:
         return 1
     for artifact in artifacts:
         print(f"{CMD_FORMAT.GREEN}Built {artifact}{CMD_FORMAT.END}")
+    return 0
+
+
+def cmd_cleanup(args: argparse.Namespace) -> int:
+    """Removes the build work dir, the artifact folder and *.egg-info folders. With none of
+    --build/--dist/--egg-info given, removes all three."""
+    logger.debug("cmd_cleanup() args: %s", args)
+    pkg_info = PythonPackage(args.root_dir)
+    try:
+        source_dirs = pkg_info.source_dirs
+    except RuntimeError:
+        source_dirs = []
+    everything = not (args.build or args.dist or args.egg_info)
+    folders = build_leftovers(pkg_info.root_dir, _resolve_build_dir(pkg_info.root_dir, args.out_dir), source_dirs,
+                              build=everything or args.build, dist=everything or args.dist,
+                              egg_info=everything or args.egg_info)
+    if not folders:
+        print(f"Nothing to clean in {pkg_info.root_dir.as_posix()}")
+        return 0
+
+    print(f"{CMD_FORMAT.BOLD}* Cleaning {pkg_info.name}:{CMD_FORMAT.END}")
+    for folder in folders:
+        print(f"remove: {folder.as_posix()}")
+    if args.dry_run:
+        return 0
+
+    for folder in folders:
+        shutil.rmtree(folder)
+    print(f"{CMD_FORMAT.GREEN}Removed {len(folders)} folder(s).{CMD_FORMAT.END}")
     return 0
 
 
@@ -378,14 +410,23 @@ def main() -> int:
 
     p_build = sub.add_parser("build", help=f"Build a wheel in <root>/{WORK_DIR}, written to <root>/{DEFAULT_DIST_DIR}")
     p_build.add_argument("root_dir", nargs="?", default='.', help=ROOT_DIR_HELP)
-    p_build.add_argument("--out-dir", default=None,
-                         help=f"Artifact folder, relative to the package root. Overrides {BUILD_DIR_ENV} and the "
-                              f"config.toml build_dir (falls back to {DEFAULT_DIST_DIR}).")
+    p_build.add_argument("--out-dir", default=None, help=OUT_DIR_HELP)
     p_build.add_argument("--sdist", action="store_true", help="Also build a source distribution")
     p_build.add_argument("--no-isolation", action="store_true",
                          help="Build in the current environment instead of a fresh isolated one")
     p_build.add_argument("--verbose", action="store_true", help="Stream the backend output")
     p_build.set_defaults(func=cmd_build)
+
+    p_cleanup = sub.add_parser("cleanup", help=f"Remove <root>/{WORK_DIR}, the artifact folder and *.egg-info "
+                                               "folders. Pick some with the flags; none removes all.")
+    p_cleanup.add_argument("root_dir", nargs="?", default='.', help=ROOT_DIR_HELP)
+    p_cleanup.add_argument("--out-dir", default=None, help=OUT_DIR_HELP)
+    p_cleanup.add_argument("--build", action="store_true", help=f"Remove the <root>/{WORK_DIR} work folder")
+    p_cleanup.add_argument("--dist", action="store_true",
+                           help="Remove the artifact folder, only when it lies inside the package")
+    p_cleanup.add_argument("--egg-info", action="store_true", help="Remove *.egg-info folders")
+    p_cleanup.add_argument("--dry-run", action="store_true", help="Print what would be removed without removing")
+    p_cleanup.set_defaults(func=cmd_cleanup)
 
     p_pub = sub.add_parser("publish", help="Publish package files into a target root")
     p_pub.add_argument("source_path", nargs="?", default='.',

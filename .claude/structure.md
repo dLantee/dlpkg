@@ -3,7 +3,8 @@
 ```
 src/dlpkg/
     cli.py          argparse tree plus every cmd_* subcommand; no dispatch layer
-    builder.py      build_package(): empties <root>/build, runs python -m build, returns new artifacts
+    builder.py      build_package(): empties <root>/build, runs python -m build, returns new artifacts;
+                    build_leftovers(): the build, dist and *.egg-info folders `dlpkg cleanup` removes
     changelog.py    release_changelog(): dates the Unreleased section and repoints compare links
     package.py      PythonPackage facade: name, version, authors, source dirs
     published.py    CHANNELS, PublishedVersion, scan_published(), find_published(), remove_published(), write_metadata()
@@ -38,6 +39,9 @@ pyproject.toml      [tool.pytest.ini_options] puts src on the test path
   `build/lib`) and writes artifacts to `_resolve_build_dir`: `--out-dir`, then `BUILD_DIR_ENV`, then config
   `build_dir`, then `DEFAULT_DIST_DIR`. Any relative value resolves against the package root, so config
   keeps `build_dir` as written (not in `ConfigToml._PATH_KEYS`). Backend output shows only on failure.
+- `cmd_cleanup` removes what `build_leftovers` finds: `WORK_DIR`, the `_resolve_build_dir` folder and
+  `*.egg-info` under the root or a source dir. No `--build/--dist/--egg-info` flag means all three. An
+  artifact folder that is the root or lies outside it raises instead, so a shared `build_dir` is never wiped.
 - `PythonPackage` reads the version from `pyproject.toml` first, then `__version__` in `__init__.py`.
   Setting it always writes `pyproject.toml`; the `__init__.py` write is best effort and skipped
   when no `__init__.py` defines `__version__`.

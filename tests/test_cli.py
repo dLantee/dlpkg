@@ -176,6 +176,60 @@ def test_cmd_build_outside_package_fails_before_running(tmp_path, monkeypatch):
     assert ran == []
 
 
+@pytest.fixture
+def leftovers(monkeypatch, tmp_path, temp_toml_package: Path) -> dict[str, Path]:
+    """build, dist and egg-info folders in temp_toml_package, with no configured build dir."""
+    monkeypatch.setattr(cli.ConfigToml, "DEFAULT_PATH", tmp_path / "no_such_config.toml")
+    monkeypatch.delenv(cli.BUILD_DIR_ENV, raising=False)
+    folders = {"build": temp_toml_package / cli.WORK_DIR, "dist": temp_toml_package / cli.DEFAULT_DIST_DIR,
+               "egg_info": temp_toml_package / "src" / "my_package.egg-info"}
+    for folder in folders.values():
+        (folder / "file.txt").parent.mkdir(parents=True)
+        (folder / "file.txt").write_text("x", encoding="utf-8")
+    return folders
+
+
+def _cleanup_args(root: Path, **overrides) -> argparse.Namespace:
+    return argparse.Namespace(**{"root_dir": str(root), "out_dir": None, "build": False, "dist": False,
+                                 "egg_info": False, "dry_run": False, **overrides})
+
+
+def test_cmd_cleanup_from_subfolder_removes_all(leftovers, temp_toml_package: Path, capsys):
+    assert cli.cmd_cleanup(_cleanup_args(temp_toml_package / "src" / "my_package")) == 0
+    assert not any(folder.exists() for folder in leftovers.values())
+    assert (temp_toml_package / "pyproject.toml").is_file()
+    assert (temp_toml_package / "src" / "my_package" / "__init__.py").is_file()
+    out = capsys.readouterr().out
+    assert all(folder.as_posix() in out for folder in leftovers.values())
+
+
+def test_cmd_cleanup_dist_flag_removes_only_dist(leftovers, temp_toml_package: Path):
+    assert cli.cmd_cleanup(_cleanup_args(temp_toml_package, dist=True)) == 0
+    assert not leftovers["dist"].exists()
+    assert leftovers["build"].exists() and leftovers["egg_info"].exists()
+
+
+def test_cmd_cleanup_dry_run_removes_nothing(leftovers, temp_toml_package: Path, capsys):
+    assert cli.cmd_cleanup(_cleanup_args(temp_toml_package, dry_run=True)) == 0
+    assert all(folder.exists() for folder in leftovers.values())
+    assert leftovers["build"].as_posix() in capsys.readouterr().out
+
+
+def test_cmd_cleanup_clean_package(monkeypatch, tmp_path, temp_toml_package: Path, capsys):
+    monkeypatch.setattr(cli.ConfigToml, "DEFAULT_PATH", tmp_path / "no_such_config.toml")
+    monkeypatch.delenv(cli.BUILD_DIR_ENV, raising=False)
+    assert cli.cmd_cleanup(_cleanup_args(temp_toml_package)) == 0
+    assert "Nothing to clean" in capsys.readouterr().out
+
+
+def test_cmd_cleanup_refuses_out_dir_outside_package(leftovers, tmp_path, temp_toml_package: Path):
+    shared = tmp_path / "shared_dist"
+    shared.mkdir()
+    with pytest.raises(cli.BuildError, match="left alone"):
+        cli.cmd_cleanup(_cleanup_args(temp_toml_package, out_dir=str(shared)))
+    assert shared.exists() and leftovers["build"].exists()
+
+
 def test_cmd_build_backend_failure_returns_1_with_output(temp_toml_package: Path, capsys):
     (temp_toml_package / "pyproject.toml").write_text('[project]\nname = "x"\nversion = "not a version"\n',
                                                      encoding="utf-8")

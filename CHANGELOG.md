@@ -10,6 +10,9 @@ All notable changes to this project will be documented in this file.
 - The `DLPKG_BUILD_DIR` environment variable sets the build output folder.
 - `dlpkg version`, `release`, `build` and `publish` find the package root by walking up to the
   nearest `pyproject.toml`, so they work from any folder inside the package.
+- `dlpkg cleanup [--build] [--dist] [--egg-info] [--dry-run]` removes the `build` work folder, the
+  artifact folder and `*.egg-info` folders; all three when no flag is given. An artifact folder
+  outside the package is refused, never deleted.
 
 ### Changed
 - `dlpkg build` builds in `<root>/build`, emptied first so deleted files never leak into the wheel,
