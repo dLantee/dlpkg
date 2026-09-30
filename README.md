@@ -17,23 +17,25 @@ py -m pip install path/to/dlpkg_root
 
 ## Usage
 
-1. Navigate to your package root (`cd path/to/your/package`).
-2. Use the `dlpkg [subcommand] [options] path` command to manage your package.
+You can navigate (`cd path/to/your/package`) to your package root and run `dlpkg` commands, or provide the path to your package root as a positional argument.
+Use the `dlpkg [subcommand] [options] [package_root_path]` command to manage your package.
 
 
 ### Stages of package management
 
 Stages of package management with dlpkg: \
-`Development🧪️️ --> Versioning🔢 --> Building🛠️ --> Publishing📦📌 --> Using🎯`
+`Source code🧪️️ --> Versioning🔢 --> Building🛠️ --> Publishing📦 --> Installing📌`
 
-**Development:** Edit your source code in the `src/your_package/` folder (or as specified in your pyproject.toml).  \
-**Versioning:** Use `dlpkg version --bump [part]` to increase the version, or `dlpkg release --bump [part]` to bump, update the changelog, commit and tag in one go. \
-**Building:** Use `dlpkg build` to build the package distribution (wheel) file.    \
-**Publishing:** Use `dlpkg publish` to copy the package into a target directory with versioned folder names. \
-**Using:** Use `dlpkg publish --write-mod` or `dlpkg use` to point Maya at one published version.
+1. Edit your **Source Code** in the `src/your_package/` folder (or as specified in your pyproject.toml).
+2. **Versioning:** Use `dlpkg version --bump [part]` to increase the version, or `dlpkg release --bump [part]` to bump, update the changelog, commit and tag in one go.
+3. **Building:** Use `dlpkg build` to build the package distributable package/artifact (wheel) file.
+4. **Publishing:** Use `dlpkg publish` to make that artifact available in a distribution location/repository.
+5. **Install:** Use `dlpkg install` to put the package into a consumer's environment.
+6. **Deploy:** Use `dlpkg install` to put the package into a consumer's environment.
+7. **Using:** Use `dlpkg publish --write-mod` or `dlpkg use` to point Maya at one published version.
 
 > [!NOTE]
-> `dlpkg publish` installs straight from the package root with `pip`, so a separate `dlpkg build`
+> `dlpkg publish` copies straight from the package root with `pip`, so a separate `dlpkg build`
 > is only needed when you want the wheel itself.
 
 ## Requirements
