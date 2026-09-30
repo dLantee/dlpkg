@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-09-29
+
 ### Added
 - `dlpkg build --sdist` also builds a source distribution, `--no-isolation` builds in the current
   environment, and `--verbose` streams the backend output, which is otherwise shown only on failure.
@@ -164,7 +166,8 @@ All notable changes to this project will be documented in this file.
 - Initial release of dlpkg.
 
 
-[Unreleased]: https://github.com/dLantee/dlpkg/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/dLantee/dlpkg/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/dLantee/dlpkg/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/dLantee/dlpkg/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/dLantee/dlpkg/compare/v0.5.2...v0.6.0
 [#7]: https://github.com/dLantee/dlpkg/issues/7
