@@ -17,7 +17,7 @@ py -m pip install path/to/dlpkg_root
 
 ## Usage
 
-You can navigate (`cd path/to/your/package`) to your package root and run `dlpkg` commands, or provide the path to your package root as a positional argument.
+You can navigate (`cd path/to/your/package`) to your package, or any folder inside it, and run `dlpkg` commands: the package root is the nearest folder above with a `pyproject.toml`. You can also provide the path to your package root as a positional argument.
 Use the `dlpkg [subcommand] [options] [package_root_path]` command to manage your package.
 
 
@@ -115,20 +115,49 @@ git push && git push --tags
 
 `dlpkg build [options] [root_dir]`
 
-Build `wheel` distribution for your package. It uses pyproject.toml configuration
-to determine the source directory and version. The built distributions are saved
-in the `./build` folder by default, but you can specify a different output directory
-with the `--out-dir` flag or the `build_dir` config setting.
+Build a `wheel` distribution for your package. It uses pyproject.toml configuration
+to determine the source directory and version. The build runs in `<root>/build`, emptied first
+so deleted files never leak into the wheel, and the wheel is written to `<root>/dist`.
+Other files in the output folder are kept.
+
+The output folder is resolved in this order: `--out-dir` flag, then the `DLPKG_BUILD_DIR`
+environment variable, then the `build_dir` setting, then `dist`. A relative folder resolves
+against the package root. Backend output is shown only when the build fails, unless `--verbose`.
 
 **Arguments & Flags:**
 - root_dir : Optional argument, specify the root of your package (default is current directory).
-- --out-dir : Optional flag, output directory for the built distributions (default: `build_dir` setting, else `./build`).
+- --out-dir : Optional flag, output directory for the built distributions (default: `dist`).
+- --sdist : Optional flag, also build a source distribution.
+- --no-isolation : Optional flag, build in the current environment instead of an isolated one.
+- --verbose : Optional flag, stream the build backend output.
 
 ```commandline
-dlpkg build --out-dir /path/to/build /path/to/your_package
+dlpkg build --out-dir /path/to/dist /path/to/your_package
 cd /path/to/your_package
-dlpkg build --out-dir /path/to/build
+dlpkg build --sdist
 dlpkg build
+```
+
+### Cleanup
+
+`dlpkg cleanup [options] [root_dir]`
+
+Remove build leftovers: the `<root>/build` work folder, the artifact folder (resolved like
+`dlpkg build`) and `*.egg-info` folders. All three are removed when no flag is given. An
+artifact folder outside the package is refused, never deleted.
+
+**Arguments & Flags:**
+- root_dir : Optional argument, specify the root of your package (default is current directory).
+- --out-dir : Optional flag, the artifact folder to remove (default: same as `dlpkg build`).
+- --build : Optional flag, remove the `build` work folder.
+- --dist : Optional flag, remove the artifact folder.
+- --egg-info : Optional flag, remove `*.egg-info` folders.
+- --dry-run : Optional flag, print what would be removed without removing.
+
+```commandline
+dlpkg cleanup --dry-run
+dlpkg cleanup --build --egg-info
+dlpkg cleanup
 ```
 
 ### Publish
@@ -247,7 +276,7 @@ directly, useful for scripting or when you don't want to hand-edit the TOML file
 
 Currently supported keys:
 - `publish_dir` : default folder for `dlpkg publish`, `list`, `use` and `prune`.
-- `build_dir` : default output folder for `dlpkg build`. Relative paths resolve against `config.toml`, so prefer an absolute path.
+- `build_dir` : default output folder for `dlpkg build` and `cleanup`. Relative paths resolve against the package root.
 - `mod_dir` : folder Maya `.mod` files are written into, instead of the first folder on `MAYA_MODULE_PATH`.
 - `list_limit` : default version-count cutoff for `dlpkg list`.
 
